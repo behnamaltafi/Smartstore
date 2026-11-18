@@ -33,6 +33,9 @@ public partial class BackInStockSubscription : BaseEntity
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>The subscribing person, independently of any commercial buyer.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

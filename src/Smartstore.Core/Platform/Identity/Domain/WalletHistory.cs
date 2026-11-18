@@ -20,6 +20,9 @@ public partial class WalletHistory : BaseEntity
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>Owner of the personal wallet transaction after the user cutover.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

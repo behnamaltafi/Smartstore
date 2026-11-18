@@ -1,0 +1,34 @@
+@model Smartstore.Web.Models.Identity.AppUserOtpModel
+@{
+    Assets.AppendTitleParts("Sign in with SMS code");
+}
+<div class="page">
+    <div class="page-title"><h1>Sign in with SMS code</h1></div>
+    <div class="page-body container">
+        <form asp-controller="AppUserOtp" asp-action="Send" method="post">
+            <input asp-for="ReturnUrl" type="hidden" />
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="form-group mb-3">
+                <label asp-for="Phone">Phone number (E.164)</label>
+                <input asp-for="Phone" class="form-control" autocomplete="tel" placeholder="+12345678901" />
+                <span asp-validation-for="Phone" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-outline-primary">Send verification code</button>
+        </form>
+
+        @if (Model.CodeRequested)
+        {
+            <div class="alert alert-info mt-3">If this number has a verified AppUser account, a code was sent.</div>
+            <form asp-controller="AppUserOtp" asp-action="Verify" method="post">
+                <input asp-for="Phone" type="hidden" />
+                <input asp-for="ReturnUrl" type="hidden" />
+                <div class="form-group mb-3">
+                    <label asp-for="Code">Six-digit code</label>
+                    <input asp-for="Code" class="form-control" autocomplete="one-time-code" inputmode="numeric" maxlength="6" />
+                    <span asp-validation-for="Code" class="text-danger"></span>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign in</button>
+            </form>
+        }
+    </div>
+</div>

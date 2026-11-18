@@ -1,0 +1,44 @@
+name: AppUser separation - build and tests
+
+on:
+  pull_request:
+    branches: [main, feature/separate-user-customer]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - '.github/workflows/app-user-separation-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_ROLL_FORWARD: Major
+  MSBUILDTERMINALLOGGER: 'off'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compile Smartstore
+        run: dotnet build Smartstore.sln --configuration Release -p:SmartstoreBuildRuntime=linux-x64 --no-self-contained
+      - name: Verify SQL Server EF Core design-time context
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.8
+          mkdir -p src/Smartstore.Web/App_Data/Tenants/Default
+          cat > src/Smartstore.Web/App_Data/Tenants/Default/Settings.txt <<'EOF'
+          AppVersion: 6.4.0
+          DataProvider: SqlServer
+          DataConnectionString: Server=localhost;Database=SmartstoreDesignTime;Trusted_Connection=True;Encrypt=False
+          EOF
+          dotnet ef dbcontext info --context SmartDbContext --project src/Smartstore.Core/Smartstore.Core.csproj --startup-project src/Smartstore.Web/Smartstore.Web.csproj --configuration Release --runtime linux-x64 --no-build --verbose
+          dotnet ef migrations add DesignTimeScaffoldingSmoke --context SmartDbContext --project src/Smartstore.Core/Smartstore.Core.csproj --startup-project src/Smartstore.Web/Smartstore.Web.csproj --output-dir EfMigrationsSmoke --configuration Release --runtime linux-x64 --no-build --verbose
+      - name: Test independent-user authorization components
+        run: dotnet test test/Smartstore.Core.Tests/Smartstore.Core.Tests.csproj --configuration Release -p:SmartstoreBuildRuntime=linux-x64 --no-build --no-restore --filter "FullyQualifiedName~AppUser"

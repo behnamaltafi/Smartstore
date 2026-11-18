@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Microsoft.EntityFrameworkCore;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 
@@ -17,7 +18,11 @@ public class RuntimeInfo
         RID = GetRuntimeIdentifier();
 
         // Reliable cross-platform way to identify bin directory (instead of 'AppContext.BaseDirectory')
-        BaseDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+        // The entry assembly belongs to dotnet-ef during design-time commands.
+        // Use Smartstore's own assembly directory to find its database provider.
+        BaseDirectory = EF.IsDesignTime
+            ? Path.GetDirectoryName(typeof(RuntimeInfo).Assembly.Location)
+            : Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
         NativeLibraryDirectory = Path.Combine(BaseDirectory, "runtimes", RID, "native");
     }
 

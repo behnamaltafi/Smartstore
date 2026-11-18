@@ -27,6 +27,9 @@ public partial class ReturnCase : BaseEntity, IAuditable
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>User who opened the return case.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

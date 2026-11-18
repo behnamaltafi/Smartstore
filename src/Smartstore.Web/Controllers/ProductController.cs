@@ -35,6 +35,7 @@ public partial class ProductController : PublicController
     private readonly IStoreMappingService _storeMappingService;
     private readonly IMediaService _mediaService;
     private readonly ICustomerService _customerService;
+    private readonly ICurrentAppUserContext _appUserContext;
     private readonly MediaSettings _mediaSettings;
     private readonly CatalogSettings _catalogSettings;
     private readonly CatalogHelper _helper;
@@ -73,7 +74,8 @@ public partial class ProductController : PublicController
         Lazy<IProductAttributeMaterializer> productAttributeMaterializer,
         Lazy<IStockSubscriptionService> stockSubscriptionService,
         Lazy<IProviderManager> providerManager,
-        Lazy<ModuleManager> moduleManager)
+        Lazy<ModuleManager> moduleManager,
+        ICurrentAppUserContext appUserContext = null)
     {
         _db = db;
         _webHelper = webHelper;
@@ -98,6 +100,7 @@ public partial class ProductController : PublicController
         _stockSubscriptionService = stockSubscriptionService;
         _providerManager = providerManager;
         _moduleManager = moduleManager;
+        _appUserContext = appUserContext;
     }
 
     #region Products
@@ -572,7 +575,13 @@ public partial class ProductController : PublicController
         }
 
         var customer = Services.WorkContext.CurrentCustomer;
-        if (customer.IsGuest() && !_catalogSettings.AllowAnonymousUsersToReviewProduct)
+        var actor = _appUserContext?.IsAppUserIdentityPresent == true
+            ? await _appUserContext.GetCurrentUserAsync()
+            : null;
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            return ChallengeOrForbid();
+
+        if (actor is null && customer.IsGuest() && !_catalogSettings.AllowAnonymousUsersToReviewProduct)
         {
             ModelState.AddModelError(string.Empty, T("Reviews.OnlyRegisteredUsersCanWriteReviews"));
         }
@@ -590,6 +599,7 @@ public partial class ProductController : PublicController
             {
                 ProductId = product.Id,
                 CustomerId = customer.Id,
+                AppUserId = actor?.Id,
                 IpAddress = _webHelper.ClientInfo.IpAddress.ToString(),
                 Title = model.Title?.RemoveHtml(),
                 ReviewText = HtmlUtility.SanitizeHtml(model.ReviewText, HtmlSanitizerOptions.UserCommentSuitable),
@@ -605,7 +615,10 @@ public partial class ProductController : PublicController
 
             await _productService.ApplyProductReviewTotalsAsync([product]);
 
-            if (isApproved)
+            // The old review reward balance is Customer-keyed. It must not
+            // accidentally credit the legacy login account instead of the
+            // actual person; user-owned loyalty is a separate cutover.
+            if (isApproved && actor is null)
             {
                 _customerService.ApplyRewardPointsForProductReview(customer, product, true);
             }
@@ -641,7 +654,13 @@ public partial class ProductController : PublicController
             throw new ArgumentException(T("Reviews.NotFound", productReviewId));
 
         var customer = Services.WorkContext.CurrentCustomer;
-        if (customer.IsGuest() && !_catalogSettings.AllowAnonymousUsersToReviewProduct)
+        var actor = _appUserContext?.IsAppUserIdentityPresent == true
+            ? await _appUserContext.GetCurrentUserAsync()
+            : null;
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            return ChallengeOrForbid();
+
+        if (actor is null && customer.IsGuest() && !_catalogSettings.AllowAnonymousUsersToReviewProduct)
         {
             return Json(new
             {
@@ -653,7 +672,9 @@ public partial class ProductController : PublicController
         }
 
         // Customers aren't allowed to vote for their own reviews.
-        if (productReview.CustomerId == customer.Id)
+        if (actor is not null
+            ? productReview.AppUserId == actor.Id
+            : productReview.AppUserId is null && productReview.CustomerId == customer.Id)
         {
             return Json(new
             {
@@ -670,7 +691,9 @@ public partial class ProductController : PublicController
             .Where(x => x.ProductReviewId == productReview.Id);
 
         // Delete previous helpfulness.
-        var oldEntry = await entriesQuery.Where(x => x.CustomerId == customer.Id).FirstOrDefaultAsync();
+        var oldEntry = actor is null
+            ? await entriesQuery.Where(x => x.CustomerId == customer.Id && x.AppUserId == null).FirstOrDefaultAsync()
+            : await entriesQuery.Where(x => x.AppUserId == actor.Id).FirstOrDefaultAsync();
 
         if (oldEntry != null)
         {
@@ -682,6 +705,7 @@ public partial class ProductController : PublicController
         {
             ProductReviewId = productReview.Id,
             CustomerId = customer.Id,
+            AppUserId = actor?.Id,
             IpAddress = _webHelper.ClientInfo.IpAddress.ToString(),
             WasHelpful = washelpful,
             IsApproved = true // Always approved

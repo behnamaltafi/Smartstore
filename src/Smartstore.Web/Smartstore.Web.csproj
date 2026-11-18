@@ -23,7 +23,11 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.Razor" Version="6.0.36" />
 		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.Extensions" Version="6.0.36" />
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.1" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8">
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -40,6 +44,8 @@
 	<ItemGroup> 
 		<ProjectReference Include="..\Smartstore\Smartstore.csproj" />
 		<ProjectReference Include="..\Smartstore.Core\Smartstore.Core.csproj" />
+		<!-- SQL Server is the only database provider for this storefront. -->
+		<ProjectReference Include="..\Smartstore.Data\Smartstore.Data.SqlServer\Smartstore.Data.SqlServer.csproj" />
 		<ProjectReference Include="..\Smartstore.Web.Common\Smartstore.Web.Common.csproj" />
 	</ItemGroup>
 	

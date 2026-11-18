@@ -79,6 +79,9 @@ public partial class Order : EntityWithAttributes, IAuditable, ISoftDeletable
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>Authenticated user who placed the order for this Customer.</summary>
+    public int? PlacedByAppUserId { get; set; }
+
     /// <summary>
     /// Gets or sets the billing address identifier
     /// </summary>
