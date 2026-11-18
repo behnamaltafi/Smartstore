@@ -2,6 +2,7 @@
 @using Smartstore.Web.Models.Identity
 
 @model LoginModel
+@inject Microsoft.Extensions.Configuration.IConfiguration AppUserConfiguration
 
 @{
     Assets.AppendTitleParts(T("PageTitle.Login"));
@@ -76,6 +77,15 @@
                     @T("Account.Login.LoginButton")
                 </button>
             </div>
+
+            @if (Microsoft.Extensions.Configuration.ConfigurationBinder.GetValue<bool>(
+                AppUserConfiguration, "AppUserAuth:Otp:Enabled"))
+            {
+                <div class="form-group text-center">
+                    <a asp-controller="AppUserOtp" asp-action="Index" asp-route-returnUrl="@returnUrl"
+                       rel="nofollow">Sign in with SMS code</a>
+                </div>
+            }
 
             <div sm-suppress-if-empty-zone="external_auth_buttons" class="form-group external-auth-buttons mb-0">
                 <div class="text-center text-uppercase mb-2">

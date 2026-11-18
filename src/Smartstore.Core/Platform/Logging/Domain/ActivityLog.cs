@@ -44,6 +44,9 @@ public partial class ActivityLog : BaseEntity
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>Authenticated actor independently of the commercial buyer.</summary>
+    public int? AppUserId { get; set; }
+
     /// <summary>
     /// Gets or sets the activity comment
     /// </summary>

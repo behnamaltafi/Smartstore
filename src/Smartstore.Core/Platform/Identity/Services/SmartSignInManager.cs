@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authentication;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,37 @@ public class SmartSignInManager : SignInManager<Customer>
     {
         _db = db;
         _customerSettings = customerSettings;
+    }
+
+    /// <summary>
+    /// During the migration window, legacy sign-in may be explicitly associated with
+    /// a separate application user. It is never inferred from matching contact details.
+    /// </summary>
+    public override async Task<ClaimsPrincipal> CreateUserPrincipalAsync(Customer user)
+    {
+        var principal = await base.CreateUserPrincipalAsync(user);
+
+        // ASP.NET Identity<Customer> must issue an immutable login ID in its
+        // signed application cookie. An AppUser is only attached to that exact
+        // legacy login account, never to a matching email or the selected buyer.
+        var identity = principal.Identities.FirstOrDefault(x => x.IsAuthenticated);
+        var loginIds = identity?.Claims.Where(c => c.Type == ClaimTypes.NameIdentifier).ToArray();
+        if (identity is not null && loginIds?.Length == 1 &&
+            loginIds[0].Value == user.Id.ToString())
+        {
+            // Ambiguous legacy mappings must fail closed rather than picking
+            // whichever AppUser happens to be returned first.
+            var matches = await _db.Value.AppUsers.AsNoTracking()
+                .Where(x => x.LegacyIdentityCustomerId == user.Id && x.Active)
+                .Take(2)
+                .ToArrayAsync();
+            if (matches.Length == 1)
+                identity.AddClaim(new Claim(CurrentAppUserContext.UserGuidClaim,
+                    matches[0].UserGuid.ToString("D"), ClaimValueTypes.String,
+                    CurrentAppUserContext.TrustedClaimIssuer));
+        }
+
+        return principal;
     }
 
     /// <inheritdoc />
@@ -74,6 +106,11 @@ public class SmartSignInManager : SignInManager<Customer>
 
         if (result.Succeeded)
         {
+            // Do not carry the buyer selected by a previous logged-in person
+            // into this new authenticated browser session.
+            Context.Response.Cookies.Delete(AppUserBuyerContext.CookieName,
+                new CookieOptions { Path = "/" });
+
             user.LastLoginDateUtc = DateTime.UtcNow;
             _db.Value.TryUpdate(user);
             await _db.Value.SaveChangesAsync();

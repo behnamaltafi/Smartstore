@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -41,6 +42,10 @@ public class IdentityController : PublicController
     private readonly TaxSettings _taxSettings;
     private readonly LocalizationSettings _localizationSettings;
     private readonly RewardPointsSettings _rewardPointsSettings;
+    private readonly IAppUserBuyerContext _buyerContext;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly AppUserCredentialService _appUserCredentials;
+    private readonly IAppUserChallengeSender _appUserDelivery;
 
     public IdentityController(
         SmartDbContext db,
@@ -59,7 +64,11 @@ public class IdentityController : PublicController
         DateTimeSettings dateTimeSettings,
         TaxSettings taxSettings,
         LocalizationSettings localizationSettings,
-        RewardPointsSettings rewardPointsSettings)
+        RewardPointsSettings rewardPointsSettings,
+        IAppUserBuyerContext buyerContext = null,
+        ICurrentAppUserContext appUserContext = null,
+        AppUserCredentialService appUserCredentials = null,
+        IAppUserChallengeSender appUserDelivery = null)
     {
         _db = db;
         _userManager = userManager;
@@ -78,6 +87,10 @@ public class IdentityController : PublicController
         _taxSettings = taxSettings;
         _localizationSettings = localizationSettings;
         _rewardPointsSettings = rewardPointsSettings;
+        _buyerContext = buyerContext;
+        _appUserContext = appUserContext;
+        _appUserCredentials = appUserCredentials;
+        _appUserDelivery = appUserDelivery;
     }
 
     #region Login / Logout / Register
@@ -107,77 +120,36 @@ public class IdentityController : PublicController
     [LocalizedRoute("/login", Name = "Login")]
     public async Task<IActionResult> Login(LoginModel model, string returnUrl)
     {
+        // Public storefront login is AppUser-only; no Customer password check.
         if (!Url.IsLocalUrl(returnUrl))
-        {
             returnUrl = string.Empty;
-        }
-
         ViewBag.ReturnUrl = returnUrl;
 
         if (ModelState.IsValid)
         {
-            Customer customer;
-
-            if (model.CustomerLoginType == CustomerLoginType.Username)
+            var identifier = model.CustomerLoginType == CustomerLoginType.Username
+                ? model.Username
+                : model.CustomerLoginType == CustomerLoginType.Email
+                    ? model.Email : model.UsernameOrEmail;
+            var actor = await _appUserCredentials.AuthenticatePasswordAsync(
+                identifier, model.Password);
+            if (actor is not null)
             {
-                customer = await _userManager.FindByNameAsync(model.Username.TrimSafe());
-            }
-            else if (model.CustomerLoginType == CustomerLoginType.Email)
-            {
-                customer = await _userManager.FindByEmailAsync(model.Email.TrimSafe());
-            }
-            else
-            {
-                customer = await _userManager.FindByEmailAsync(model.UsernameOrEmail.TrimSafe()) ?? await _userManager.FindByNameAsync(model.UsernameOrEmail.TrimSafe());
+                await AppUserAuthenticationController.SignInUserAsync(
+                    HttpContext, _buyerContext, actor, model.RememberMe);
+                return returnUrl.HasValue() && returnUrl != "/"
+                    ? RedirectToReferrer(returnUrl)
+                    : RedirectToRoute("Homepage");
             }
 
-            if (customer != null)
-            {
-                var result = await _signInManager.PasswordSignInAsync(customer, model.Password, model.RememberMe, lockoutOnFailure: false);
-
-                if (result.Succeeded)
-                {
-                    await Services.EventPublisher.PublishAsync(new CustomerSignedInEvent { Customer = customer });
-
-                    await _shoppingCartService.MigrateCartAsync(Services.WorkContext.CurrentCustomer, customer);
-
-                    Services.ActivityLogger.LogActivity(KnownActivityLogTypes.PublicStoreLogin, T("ActivityLog.PublicStore.Login"), customer);
-
-                    if (returnUrl.IsEmpty()
-                        || returnUrl == "/"
-                        || returnUrl.Contains("/passwordrecovery", StringComparison.OrdinalIgnoreCase)
-                        || returnUrl.Contains("/activation", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return RedirectToRoute("Homepage");
-                    }
-
-                    return RedirectToReferrer(returnUrl);
-                }
-                else
-                {
-                    if (_customerSettings.UserRegistrationType == UserRegistrationType.EmailValidation && customer.Active == false)
-                    {
-                        ModelState.AddModelError(string.Empty, T("Account.Login.CheckEmailAccount"));
-                    }
-                    else
-                    {
-                        ModelState.AddModelError(string.Empty, T("Account.Login.WrongCredentials"));
-                    }
-                }
-            }
-            else
-            {
-                ModelState.AddModelError(string.Empty, T("Account.Login.WrongCredentials"));
-            }
+            ModelState.AddModelError(string.Empty, T("Account.Login.WrongCredentials"));
         }
 
-        // If we got this far something failed. Redisplay form!
         model.CustomerLoginType = _customerSettings.CustomerLoginType;
-
         return View(model);
     }
 
-    [NeverAuthorize, CheckStoreClosed(false)]
+        [NeverAuthorize, CheckStoreClosed(false)]
     [DisallowRobot(true)]
     [LocalizedRoute("/logout", Name = "Logout")]
     public async Task<IActionResult> Logout()
@@ -200,6 +172,8 @@ public class IdentityController : PublicController
             Services.ActivityLogger.LogActivity(KnownActivityLogTypes.PublicStoreLogout, T("ActivityLog.PublicStore.Logout"));
 
             await _signInManager.SignOutAsync();
+            await HttpContext.SignOutAsync(AppUserAuthenticationDefaults.Scheme);
+            _buyerContext?.ClearSelection();
             await db.SaveChangesAsync();
 
             return RedirectToRoute("Homepage");
@@ -232,96 +206,46 @@ public class IdentityController : PublicController
     [LocalizedRoute("/register", Name = "Register")]
     public async Task<IActionResult> Register(RegisterModel model, string returnUrl = null)
     {
-        // Check whether registration is allowed.
         if (_customerSettings.UserRegistrationType == UserRegistrationType.Disabled)
-        {
             return RedirectToRoute("RegisterResult", new { resultId = (int)UserRegistrationType.Disabled });
-        }
-
-        var customer = Services.WorkContext.CurrentCustomer;
-        if (customer.IsRegistered())
-        {
-            // Already registered customer. 
-            // await _signInManager.SignOutAsync();
-
-            return RedirectToRoute("RegisterResult", new { message = T("Account.Register.Result.AlreadyRegistered").Value });
-        }
-
-        // TODO: (mh) Password validation is already performed in the UserManager.AddPasswordAsync method. Refactor workflow.
-        foreach (var validator in _userManager.PasswordValidators)
-        {
-            AddModelStateErrors(await validator.ValidateAsync(_userManager, customer, model.Password), true);
-        }
 
         if (!Url.IsLocalUrl(returnUrl))
-        {
             returnUrl = string.Empty;
-        }
-
         ViewData["ReturnUrl"] = returnUrl;
+
+        // Do not silently bypass existing email-validation/admin-approval
+        // registration policies until corresponding AppUser workflows exist.
+        if (_customerSettings.UserRegistrationType != UserRegistrationType.Standard)
+        {
+            ModelState.AddModelError(string.Empty,
+                "Independent AppUser registration requires its own approval/activation policy.");
+        }
 
         if (ModelState.IsValid)
         {
-            var succeeded = false;
-            var oldUserName = customer.Username;
-            var oldEmail = customer.Email;
-            var oldPasswordFormat = customer.PasswordFormat;
-            var oldActive = customer.Active;
-            var oldCreatedOn = customer.CreatedOnUtc;
-            var oldLastActivityDate = customer.LastActivityDateUtc;
-
-            customer.Username = model.Username != null ? model.Username.Trim() : model.Email.Trim();
-            customer.Email = model.Email.Trim();
-            customer.PasswordFormat = _customerSettings.DefaultPasswordFormat;
-            customer.Active = _customerSettings.UserRegistrationType == UserRegistrationType.Standard;
-            customer.CreatedOnUtc = DateTime.UtcNow;
-            customer.LastActivityDateUtc = DateTime.UtcNow;
-
-            try
+            var username = model.Username.HasValue() ? model.Username : model.Email;
+            var user = await _appUserCredentials.RegisterAsync(
+                username, model.Email, model.Password, model.Phone);
+            if (user is not null)
             {
-                var identityResult = await _userManager.UpdateAsync(customer);
-                if (identityResult.Succeeded)
-                {
-                    var passwordResult = await _userManager.AddPasswordAsync(customer, model.Password);
-                    succeeded = passwordResult.Succeeded;
-                    AddModelStateErrors(passwordResult);
-                }
-
-                AddModelStateErrors(identityResult);
-            }
-            finally
-            {
-                if (!succeeded)
-                {
-                    customer.Username = oldUserName;
-                    customer.Email = oldEmail;
-                    customer.PasswordFormat = oldPasswordFormat;
-                    customer.Active = oldActive;
-                    customer.CreatedOnUtc = oldCreatedOn;
-                    customer.LastActivityDateUtc = oldLastActivityDate;
-
-                    await _db.SaveChangesAsync();
-                }
+                await AppUserAuthenticationController.SignInUserAsync(
+                    HttpContext, _buyerContext, user, false);
+                var verification = await _appUserCredentials.BeginEmailVerificationAsync(user);
+                if (verification is not null)
+                    await _appUserDelivery.SendEmailVerificationAsync(user.Email, verification);
+                return returnUrl.HasValue()
+                    ? RedirectToReferrer(returnUrl)
+                    : RedirectToRoute("Homepage");
             }
 
-            if (succeeded)
-            {
-                await AssignCustomerRolesAsync(customer);
-
-                // Update customer properties.
-                await MapRegisterModelToCustomerAsync(customer, model);
-
-                return await FinalizeCustomerRegistrationAsync(customer, returnUrl);
-            }
+            ModelState.AddModelError(string.Empty, "Invalid registration details or account already exists.");
         }
 
-        // If we got this far something failed. Redisplay form.
         await PrepareRegisterModelAsync(model);
-
         return View(model);
     }
 
-    [HttpGet]
+        [HttpGet]
     [AllowAnonymous, NeverAuthorize]
     [LocalizedRoute("/registerresult", Name = "RegisterResult")]
     public IActionResult RegisterResult(int? resultId, string message = "")
@@ -359,41 +283,16 @@ public class IdentityController : PublicController
     [LocalizedRoute("/customer/activation", Name = "AccountActivation")]
     public async Task<IActionResult> AccountActivation(string token, string email)
     {
-        var customer = await _userManager.FindByEmailAsync(email);
-
-        if (customer == null)
+        // Confirm ownership of an AppUser email, never a Customer login.
+        if (!await _appUserCredentials.CompleteEmailVerificationAsync(email, token))
         {
             NotifyError(T("Account.AccountActivation.InvalidEmailOrToken"));
             return RedirectToRoute("Homepage");
         }
 
-        if (await _userManager.IsEmailConfirmedAsync(customer))
-        {
-            ViewBag.ActivationResult = T("Account.AccountActivation.Activated");
-            return View();
-        }
-
-        // Validate token & set user to active.
-        var confirmed = await _userManager.ConfirmEmailAsync(customer, token);
-
-        if (!confirmed.Succeeded)
-        {
-            NotifyError(T("Account.AccountActivation.InvalidEmailOrToken"));
-            return RedirectToRoute("HomePage");
-        }
-
-        // If token wasn't proved invalid by ConfirmEmailAsync() a few lines above, Customer.Active was set to true & AccountActivationToken was resetted in UserStore.
-        // So we better save here.
-        await _db.SaveChangesAsync();
-
-        // Send welcome message.
-        await _messageFactory.SendCustomerWelcomeMessageAsync(customer, Services.WorkContext.WorkingLanguage.Id);
-
         ViewBag.ActivationResult = T("Account.AccountActivation.Activated");
-
         return View();
     }
-
     #endregion
 
     #region Profile
@@ -461,12 +360,11 @@ public class IdentityController : PublicController
     #region Change password
 
     [DisallowRobot]
-    public IActionResult ChangePassword()
+    public async Task<IActionResult> ChangePassword()
     {
-        if (!Services.WorkContext.CurrentCustomer.IsRegistered())
-        {
+        // The account page authenticates the person, not their commercial buyer.
+        if (_appUserContext is null || await _appUserContext.GetCurrentUserAsync() is null)
             return ChallengeOrForbid();
-        }
 
         return View(new ChangePasswordModel());
     }
@@ -474,43 +372,23 @@ public class IdentityController : PublicController
     [HttpPost]
     public async Task<IActionResult> ChangePassword(ChangePasswordModel model)
     {
-        var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
-        {
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (actor is null)
             return ChallengeOrForbid();
-        }
-
-        // TODO: (mh) Password validation is already performed in the UserManager.ChangePasswordAsync method. Refactor workflow.
-        foreach (var validator in _userManager.PasswordValidators)
-        {
-            AddModelStateErrors(await validator.ValidateAsync(_userManager, customer, model.NewPassword), true);
-        }
 
         if (ModelState.IsValid)
         {
-            IdentityResult passwordResult;
-            if (await _userManager.CheckPasswordAsync(customer, model.OldPassword))
+            if (await _appUserCredentials.ChangePasswordAsync(
+                actor, model.OldPassword, model.NewPassword))
             {
-                var token = await _userManager.GeneratePasswordResetTokenAsync(customer);
-                var oldPasswordFormat = customer.PasswordFormat;
-                customer.PasswordFormat = _customerSettings.DefaultPasswordFormat;
-
-                passwordResult = await _userManager.ResetPasswordAsync(customer, token, model.NewPassword);
-                if (passwordResult.Succeeded)
-                {
-                    model.Result = T("Account.ChangePassword.Success");
-                }
-                else
-                {
-                    customer.PasswordFormat = oldPasswordFormat;
-                }
+                await HttpContext.SignOutAsync(AppUserAuthenticationDefaults.Scheme);
+                _buyerContext?.ClearSelection();
+                model.Result = T("Account.ChangePassword.Success");
             }
             else
             {
-                passwordResult = await _userManager.ChangePasswordAsync(customer, model.OldPassword, model.NewPassword);
+                ModelState.AddModelError(string.Empty, T("Account.Login.WrongCredentials"));
             }
-
-            AddModelStateErrors(passwordResult);
         }
 
         return View(model);
@@ -536,21 +414,11 @@ public class IdentityController : PublicController
     {
         if (ModelState.IsValid)
         {
-            var customer = await _userManager.FindByEmailAsync(model.Email);
-            if (customer != null && customer.Active)
-            {
-                var token = await _userManager.GeneratePasswordResetTokenAsync(customer);
-                customer.GenericAttributes.PasswordRecoveryToken = token;
-                await _db.SaveChangesAsync();
+            var token = await _appUserCredentials.BeginPasswordResetAsync(model.Email);
+            if (token is not null)
+                await _appUserDelivery.SendPasswordResetAsync(model.Email, token);
 
-                await _messageFactory.SendCustomerPasswordRecoveryMessageAsync(customer, Services.WorkContext.WorkingLanguage.Id);
-                model.ResultState = PasswordRecoveryResultState.Success;
-            }
-            else
-            {
-                model.ResultState = PasswordRecoveryResultState.Error;
-            }
-
+            model.ResultState = PasswordRecoveryResultState.Success;
             model.ResultMessage = T("Account.PasswordRecovery.EmailHasBeenSent");
         }
 
@@ -572,37 +440,16 @@ public class IdentityController : PublicController
     [FormValueRequired("set-password")]
     public async Task<IActionResult> PasswordRecoveryConfirmPOST(PasswordRecoveryConfirmModel model)
     {
-        var customer = await _userManager.FindByEmailAsync(model.Email);
-
-        // TODO: (mh) Password validation is already performed in the UserManager.ResetPasswordAsync method. Refactor workflow.
-        foreach (var validator in _userManager.PasswordValidators)
-        {
-            AddModelStateErrors(await validator.ValidateAsync(_userManager, customer, model.NewPassword), true);
-        }
-
         if (ModelState.IsValid)
         {
-            var oldPasswordFormat = customer.PasswordFormat;
-            customer.PasswordFormat = _customerSettings.DefaultPasswordFormat;
-
-            var identityResult = await _userManager.ResetPasswordAsync(customer, model.Token, model.NewPassword);
-            if (identityResult.Succeeded)
+            if (await _appUserCredentials.CompletePasswordResetAsync(
+                model.Email, model.Token, model.NewPassword))
             {
-                customer.GenericAttributes.PasswordRecoveryToken = string.Empty;
-                // Detect and repair accidental guest role assignments
-                await CheckRegisteredRole(customer);
-                await _db.SaveChangesAsync();
-
                 model.SuccessfullyChanged = true;
                 model.Result = T("Account.PasswordRecovery.PasswordHasBeenChanged");
             }
             else
-            {
-                customer.PasswordFormat = oldPasswordFormat;
-                identityResult.Errors.Each(x => NotifyError(x.Description));
-
-                return RedirectToAction(nameof(PasswordRecoveryConfirm), new { token = model.Token, email = model.Email });
-            }
+                ModelState.AddModelError(string.Empty, T("Account.PasswordRecovery.WrongToken"));
         }
 
         return View(model);
@@ -616,87 +463,19 @@ public class IdentityController : PublicController
     [AllowAnonymous, DisallowRobot]
     public IActionResult ExternalLogin(string provider)
     {
-        var redirectUrl = Url.Action(nameof(ExternalLoginCallback), "Identity");
-        var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, redirectUrl);
-        properties.AllowRefresh = true;
-        properties.IsPersistent = true;
-
-        return Challenge(properties, provider);
+        // Issue an independent external challenge, not SignInManager<Customer>.
+        return RedirectToAction(nameof(AppUserAuthenticationController.ExternalChallenge),
+            "AppUserAuthentication", new { provider });
     }
 
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> ExternalLoginCallback(string returnUrl = null, string remoteError = null)
     {
-        if (remoteError != null)
-        {
-            NotifyError(remoteError.Truncate(200).HtmlEncode());
-            return RedirectToAction(nameof(Login));
-        }
-
-        var info = await _signInManager.GetExternalLoginInfoAsync();
-        if (info == null)
-        {
-            // INFO: if you get here and wonder why it fails, call HttpContext.AuthenticateAsync(IdentityConstants.ExternalScheme)
-            // (which is internally called by GetExternalLoginInfoAsync) and check AuthenticateResult for errors.
-            return RedirectToAction(nameof(Login));
-        }
-
-        // Sign in the user with this external login provider if the user already has a login.
-        var signinResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, false);
-        if (signinResult.Succeeded)
-        {
-            var customer = await _userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
-            if (customer != null)
-            {
-                await FinalizeLoginAsync(Services.WorkContext.CurrentCustomer, customer, logActivity: false);
-            }
-
-            Services.ActivityLogger.LogActivity(KnownActivityLogTypes.PublicStoreLogin, T("ActivityLog.PublicStore.LoginExternal"), info.LoginProvider);
-            return RedirectToReferrer(returnUrl, () => RedirectToRoute("Homepage"));
-        }
-        else
-        {
-            // User doesn't have an account yet.
-            if (_customerSettings.UserRegistrationType != UserRegistrationType.Disabled)
-            {
-                var customer = new Customer
-                {
-                    Username = info.Principal.FindFirstValue(ClaimTypes.Name),
-                    Email = info.Principal.FindFirstValue(ClaimTypes.Email),
-                    PasswordFormat = _customerSettings.DefaultPasswordFormat,
-                    Active = _customerSettings.UserRegistrationType == UserRegistrationType.Standard,
-                    CreatedOnUtc = DateTime.UtcNow,
-                    LastActivityDateUtc = DateTime.UtcNow
-                };
-
-                var identityResult = await _userManager.CreateAsync(customer);
-                if (identityResult.Succeeded)
-                {
-                    // INFO: this creates the external auth record.
-                    identityResult = await _userManager.AddLoginAsync(customer, info);
-                    if (identityResult.Succeeded)
-                    {
-                        await AssignCustomerRolesAsync(customer);
-
-                        var result = await FinalizeCustomerRegistrationAsync(customer, returnUrl);
-                        await FinalizeLoginAsync(Services.WorkContext.CurrentCustomer, customer, logActivity: true);
-
-                        return result;
-                    }
-                }
-
-                // Display errors to user.
-                identityResult.Errors.Each(x => NotifyError(x.Description));
-            }
-            else
-            {
-                // Creating new accounts is disabled.
-                NotifyError(T("Account.Register.Result.Disabled"));
-            }
-
-            return RedirectToReferrer(returnUrl, () => RedirectToRoute("Login"));
-        }
+        // Legacy callbacks must never create or sign in Customer credentials.
+        // New challenges are issued by AppUserAuthenticationController only.
+        await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
+        return RedirectToRoute("Login");
     }
 
     [HttpGet]

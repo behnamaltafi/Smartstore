@@ -19,7 +19,7 @@ already documented.
 - **Do not rewrite existing XML documentation comments** (including `<inheritdoc/>`)
   while changing code. Preserve them verbatim; touch them only when the documentation
   itself is wrong. New public members do get docs.
-- **Database changes use FluentMigrator, not EF Core migrations.**
+- **Existing Smartstore migrations remain on FluentMigrator.** SQL Server-only EF Core migration scaffolding is supported for explicitly approved changes after a reviewed baseline. Follow `dev-docs/advanced/ef-core-sql-server-migrations.md` and never give both migration systems ownership of the same schema object.
 - **Sass is compiled with native embedded Dart Sass.** Existing stylesheets use
   `@import`; keep that style until the Sass module-system migration is planned.
 - **No new heavy client-side dependency** without asking first.
@@ -112,7 +112,7 @@ Beyond formatting:
 
 ## Data and localization
 
-- Schema changes are **FluentMigrator** migrations. EF Core migrations are not used.
+- Legacy schema changes remain **FluentMigrator** migrations. For explicitly scoped SQL Server-only EF Core migrations, first follow the baseline and ownership rules in `dev-docs/advanced/ef-core-sql-server-migrations.md`.
 - New or changed core and platform locale resources go into
   `src/Smartstore.Core/Migrations/SmartDbContextDataSeeder.cs`.
   - Without hints, use `AddOrUpdate(key, value, deValue)`; omit the hint arguments

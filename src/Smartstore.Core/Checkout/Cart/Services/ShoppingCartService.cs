@@ -26,6 +26,7 @@ public partial class ShoppingCartService : IShoppingCartService
 
     private readonly SmartDbContext _db;
     private readonly IWorkContext _workContext;
+    private readonly ICurrentAppUserContext _appUserContext;
     private readonly IStoreContext _storeContext;
     private readonly IRequestCache _requestCache;
     private readonly IEventPublisher _eventPublisher;
@@ -51,7 +52,8 @@ public partial class ShoppingCartService : IShoppingCartService
         Lazy<ICheckoutFactory> checkoutFactory,
         ICurrencyService currencyService,
         RewardPointsSettings rewardPointsSettings,
-        ShoppingCartSettings shoppingCartSettings)
+        ShoppingCartSettings shoppingCartSettings,
+        ICurrentAppUserContext appUserContext = null)
     {
         _db = db;
         _workContext = workContext;
@@ -65,6 +67,7 @@ public partial class ShoppingCartService : IShoppingCartService
         _checkoutFactory = checkoutFactory;
         _rewardPointsSettings = rewardPointsSettings;
         _shoppingCartSettings = shoppingCartSettings;
+        _appUserContext = appUserContext;
 
         _primaryCurrency = currencyService.PrimaryCurrency;
     }
@@ -78,6 +81,19 @@ public partial class ShoppingCartService : IShoppingCartService
         Guard.NotNull(ctx.Item);
 
         var customer = ctx.Customer ?? _workContext.CurrentCustomer;
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            throw new UnauthorizedAccessException("Invalid application user identity.");
+
+        if (actor is not null)
+        {
+            ctx.Item.AppUserId = actor.Id;
+            foreach (var item in ctx.RequiredItems)
+                item.AppUserId = actor.Id;
+            foreach (var item in ctx.ChildItems)
+                item.AppUserId = actor.Id;
+        }
+
         if (customer.IsBot())
         {
             return;
@@ -112,6 +128,13 @@ public partial class ShoppingCartService : IShoppingCartService
         // This is called when customer adds a product to cart
         ctx.Customer ??= _workContext.CurrentCustomer;
         ctx.StoreId ??= _storeContext.CurrentStore.Id;
+
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+        {
+            ctx.Warnings.Add("Invalid application user identity.");
+            return false;
+        }
 
         if (ctx.Customer.IsBot())
         {
@@ -185,6 +208,11 @@ public partial class ShoppingCartService : IShoppingCartService
 
             if (ctx.RequiredItems.Count > 0)
             {
+                if (actor is not null)
+                {
+                    foreach (var item in ctx.RequiredItems)
+                        item.AppUserId = actor.Id;
+                }
                 ctx.Customer.ShoppingCartItems.AddRange(ctx.RequiredItems);
             }
 
@@ -208,6 +236,7 @@ public partial class ShoppingCartService : IShoppingCartService
                 StoreId = ctx.StoreId.Value,
                 Quantity = ctx.Quantity,
                 Customer = ctx.Customer,
+                AppUserId = actor?.Id,
                 Product = ctx.Product,
                 ProductId = ctx.Product.Id,
                 ParentItemId = null,
@@ -329,6 +358,11 @@ public partial class ShoppingCartService : IShoppingCartService
     {
         Guard.NotNull(cartItem);
 
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true &&
+            (actor is null || cartItem.AppUserId != actor.Id))
+            throw new UnauthorizedAccessException("Shopping cart item does not belong to the authenticated user.");
+
         var customer = cartItem.Customer;
         var storeId = cartItem.StoreId;
 
@@ -339,11 +373,13 @@ public partial class ShoppingCartService : IShoppingCartService
 
         _db.ShoppingCartItems.Remove(cartItem);
 
-        // Delete child cart items.
-        if (customer != null)
+        // Delete child cart items. An AppUser-owned item may no longer have
+        // a valid legacy Customer navigation after the final schema cutover.
+        if (customer != null || actor != null)
         {
             var childItems = await _db.ShoppingCartItems
-                .Where(x => x.CustomerId == customer.Id && x.ParentItemId != null && x.ParentItemId.Value == cartItem.Id && x.Id != cartItem.Id)
+                .Where(x => (actor != null ? x.AppUserId == actor.Id : x.CustomerId == customer.Id) &&
+                    x.ParentItemId != null && x.ParentItemId.Value == cartItem.Id && x.Id != cartItem.Id)
                 .ToListAsync();
 
             _db.ShoppingCartItems.RemoveRange(childItems);
@@ -374,6 +410,14 @@ public partial class ShoppingCartService : IShoppingCartService
                 itemsToDelete.AddRange(item.ChildItems.Select(x => x.Item));
             }
 
+            // Never accept a caller-provided cart as proof of item ownership.
+            if (_appUserContext?.IsAppUserIdentityPresent == true)
+            {
+                var actor = await _appUserContext.GetCurrentUserAsync();
+                if (actor is null || itemsToDelete.Any(x => x.AppUserId != actor.Id))
+                    throw new UnauthorizedAccessException("Cart contains items owned by a different user.");
+            }
+
             _db.ShoppingCartItems.RemoveRange(itemsToDelete);
 
             await _db.SaveChangesAsync();
@@ -399,30 +443,46 @@ public partial class ShoppingCartService : IShoppingCartService
         return numDeleted;
     }
 
-    public virtual Task<ShoppingCart> GetCartAsync(
+    public virtual async Task<ShoppingCart> GetCartAsync(
         Customer customer = null,
         ShoppingCartType cartType = ShoppingCartType.ShoppingCart,
         int storeId = 0,
         bool? activeOnly = true)
     {
         customer ??= _workContext.CurrentCustomer;
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            throw new UnauthorizedAccessException("Invalid application user identity.");
 
         if (!_shoppingCartSettings.AllowActivatableCartItems)
         {
-            // Always load all items, regardless of whether they are active or inactive.
             activeOnly = null;
         }
 
-        var cacheKey = CartItemsKey.FormatInvariant(customer.Id, (int)cartType, storeId, activeOnly);
+        // The buyer may change; the personal cart and its cache must not.
+        var ownerKey = actor is null ? customer.Id.ToString() : "appuser:" + actor.Id;
+        var cacheKey = CartItemsKey.FormatInvariant(ownerKey, (int)cartType, storeId, activeOnly);
 
-        var result = _requestCache.GetAsync(cacheKey, async () =>
+        return await _requestCache.GetAsync(cacheKey, async () =>
         {
-            await LoadCartItemCollection(customer);
-            var cartItems = customer.ShoppingCartItems.FilterByCartType(cartType, storeId, activeOnly).ToList();
+            List<ShoppingCartItem> cartItems;
+            if (actor is null)
+            {
+                await LoadCartItemCollection(customer);
+                cartItems = customer.ShoppingCartItems.FilterByCartType(cartType, storeId, activeOnly).ToList();
+            }
+            else
+            {
+                // Tracked items are required by existing cart update and checkout operations.
+                var owned = await _db.ShoppingCartItems
+                    .Include(x => x.Product)
+                    .ThenInclude(x => x.ProductVariantAttributes)
+                    .Where(x => x.AppUserId == actor.Id)
+                    .ToListAsync();
+                cartItems = owned.FilterByCartType(cartType, storeId, activeOnly).ToList();
+            }
 
-            // Perf: Prefetch (load) all attribute values in any of the attribute definitions across all cart items (including any bundle part).
             await _productAttributeMaterializer.PrefetchProductVariantAttributesAsync(cartItems.Select(x => x.AttributeSelection));
-
             var organizedItems = await OrganizeCartItemsAsync(cartItems);
 
             return new ShoppingCart(customer, storeId, organizedItems)
@@ -431,8 +491,6 @@ public partial class ShoppingCartService : IShoppingCartService
                 Requirements = _checkoutFactory.Value.GetRequirements()
             };
         });
-
-        return result;
     }
 
     public virtual async Task<int> CountProductsInCartAsync(
@@ -448,15 +506,29 @@ public partial class ShoppingCartService : IShoppingCartService
             activeOnly = null;
         }
 
-        var cacheKey = CartItemsKey.FormatInvariant(customer.Id, (int)cartType, storeId, activeOnly);
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            throw new UnauthorizedAccessException("Invalid application user identity.");
+
+        var ownerKey = actor is null ? customer.Id.ToString() : "appuser:" + actor.Id;
+        var cacheKey = CartItemsKey.FormatInvariant(ownerKey, (int)cartType, storeId, activeOnly);
         var cart = _requestCache.Get<ShoppingCart>(cacheKey, null);
         if (cart != null)
         {
             return cart.GetTotalQuantity();
         }
 
-        await LoadCartItemCollection(customer);
+        if (actor is not null)
+        {
+            var owned = await _db.ShoppingCartItems
+                .Include(x => x.Product)
+                .Where(x => x.AppUserId == actor.Id)
+                .ToListAsync();
+            return owned.FilterByCartType(cartType, storeId, activeOnly, false)
+                .Sum(x => (int?)x.Quantity) ?? 0;
+        }
 
+        await LoadCartItemCollection(customer);
         return customer.ShoppingCartItems
             .FilterByCartType(cartType, storeId, activeOnly, false)
             .Sum(x => (int?)x.Quantity) ?? 0;
@@ -466,6 +538,10 @@ public partial class ShoppingCartService : IShoppingCartService
     {
         Guard.NotNull(fromCustomer);
         Guard.NotNull(toCustomer);
+
+        // A signed-in AppUser owns one cart across all commercial buyers.
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+            return false;
 
         if (fromCustomer.Id == toCustomer.Id || toCustomer.IsBot())
         {
@@ -526,10 +602,18 @@ public partial class ShoppingCartService : IShoppingCartService
     {
         Guard.NotNull(customer);
 
-        await LoadCartItemCollection(customer);
+        var actor = _appUserContext is null ? null : await _appUserContext.GetCurrentUserAsync();
+        if (_appUserContext?.IsAppUserIdentityPresent == true && actor is null)
+            throw new UnauthorizedAccessException("Invalid application user identity.");
+
+        if (actor is null)
+            await LoadCartItemCollection(customer);
 
         var warnings = new List<string>();
-        var cartItem = customer.ShoppingCartItems.FirstOrDefault(x => x.Id == cartItemId && x.ParentItemId == null);
+        var cartItem = actor is null
+            ? customer.ShoppingCartItems.FirstOrDefault(x => x.Id == cartItemId && x.ParentItemId == null)
+            : await _db.ShoppingCartItems.FirstOrDefaultAsync(x =>
+                x.AppUserId == actor.Id && x.Id == cartItemId && x.ParentItemId == null);
         if (cartItem == null)
         {
             return warnings;
@@ -590,6 +674,17 @@ public partial class ShoppingCartService : IShoppingCartService
         bool validateRequiredProducts = true)
     {
         cart ??= await GetCartAsync(storeId: _storeContext.CurrentStore.Id);
+
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            var actor = await _appUserContext.GetCurrentUserAsync();
+            if (actor is null || cart.Items.Any(item =>
+                item.Item.AppUserId != actor.Id ||
+                item.ChildItems.Any(child => child.Item.AppUserId != actor.Id)))
+            {
+                throw new UnauthorizedAccessException("Cart contains items not owned by the authenticated user.");
+            }
+        }
 
         if (cart.Customer.IsBot())
         {

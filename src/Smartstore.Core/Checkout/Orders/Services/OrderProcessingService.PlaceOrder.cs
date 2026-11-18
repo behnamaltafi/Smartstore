@@ -30,6 +30,39 @@ public partial class OrderProcessingService : IOrderProcessingService
             paymentRequest.OrderGuid = Guid.NewGuid();
         }
 
+        AppUser appUser = null;
+        int? selectedBuyerId = null;
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            appUser = await _appUserContext.GetCurrentUserAsync(cancelToken);
+            selectedBuyerId = _appUserBuyerContext is null
+                ? null
+                : await _appUserBuyerContext.GetSelectedCustomerIdAsync(cancelToken);
+
+            // The payment request's CustomerId is the legacy checkout account.
+            // Its selected commercial buyer comes only from the verified membership.
+            if (appUser is null ||
+                appUser.LegacyIdentityCustomerId != paymentRequest.CustomerId ||
+                !selectedBuyerId.HasValue || _appUserCustomerService is null ||
+                !await _appUserCustomerService.CanAccessCustomerAsync(
+                    appUser.Id, selectedBuyerId.Value, cancelToken))
+            {
+                var denied = new OrderPlacementResult();
+                denied.Errors.Add("Select an authorized commercial customer before checkout.");
+                return denied;
+            }
+
+            // Buyer-level pricing, tax, shipping and payment are still computed
+            // against the legacy account. Fail closed before payment processing
+            // rather than charge one buyer and persist the order under another.
+            if (selectedBuyerId.Value != paymentRequest.CustomerId)
+            {
+                var blocked = new OrderPlacementResult();
+                blocked.Errors.Add("Checkout for a different commercial buyer is unavailable until buyer-level financial calculations are migrated.");
+                return blocked;
+            }
+        }
+
         var customer = await _db.Customers
             .IncludeCustomerRoles()
             .FindByIdAsync(paymentRequest.CustomerId, true, cancelToken);
@@ -74,6 +107,10 @@ public partial class OrderProcessingService : IOrderProcessingService
             await ApplyPricingData(ctx);
 
             await ProcessPayment(ctx);
+
+            ctx.Order.PlacedByAppUserId = appUser?.Id;
+            if (selectedBuyerId.HasValue)
+                ctx.Order.CustomerId = selectedBuyerId.Value;
 
             _db.Orders.Add(ctx.Order);
 

@@ -1,0 +1,12 @@
+{
+  "$schema": "../module.schema.json",
+  "Author": "BonakMarket",
+  "Group": "Mobile",
+  "SystemName": "Smartstore.MultiSms",
+  "FriendlyName": "Multi-provider SMS Gateway",
+  "Description": "Runtime-selectable SMS gateway with Kavenegar and Melipayamak, safe failover and admin settings.",
+  "Version": "6.4.0",
+  "MinAppVersion": "6.4.0",
+  "Order": 2,
+  "ResourceRootKey": "Plugins.Sms.MultiSms"
+}

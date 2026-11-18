@@ -7,6 +7,7 @@ using Smartstore.Core.Checkout.Payment;
 using Smartstore.Core.Checkout.Shipping;
 using Smartstore.Core.Common.Configuration;
 using Smartstore.Core.Common.Services;
+using Smartstore.Core.Identity;
 using Smartstore.Core.Localization;
 using Smartstore.Core.Security;
 using Smartstore.Core.Seo;
@@ -27,6 +28,8 @@ public class OrderController : PublicController
     private readonly IProviderManager _providerManager;
     private readonly OrderSettings _orderSettings;
     private readonly PdfSettings _pdfSettings;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly IAppUserOrderAccessService _appUserOrderAccess;
 
     public OrderController(
         SmartDbContext db,
@@ -38,7 +41,9 @@ public class OrderController : PublicController
         IProviderManager providerManager,
         ProductUrlHelper productUrlHelper,
         OrderSettings orderSettings,
-        PdfSettings pdfSettings)
+        PdfSettings pdfSettings,
+        ICurrentAppUserContext appUserContext = null,
+        IAppUserOrderAccessService appUserOrderAccess = null)
     {
         _db = db;
         _orderProcessingService = orderProcessingService;
@@ -50,6 +55,8 @@ public class OrderController : PublicController
         _productUrlHelper = productUrlHelper;
         _orderSettings = orderSettings;
         _pdfSettings = pdfSettings;
+        _appUserContext = appUserContext;
+        _appUserOrderAccess = appUserOrderAccess;
     }
 
     public async Task<IActionResult> Details(int id)
@@ -382,6 +389,10 @@ public class OrderController : PublicController
 
     private async Task<bool> IsUnauthorizedOrderAsync(Order order)
     {
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+            return order is null || _appUserOrderAccess is null ||
+                !await _appUserOrderAccess.CanAccessOrderAsync(order.Id);
+
         if (!await Services.Permissions.AuthorizeAsync(Permissions.Order.Read))
         {
             return order == null || order.CustomerId != Services.WorkContext.CurrentCustomer.Id;

@@ -27,6 +27,9 @@ public partial class OrderProcessingService : IOrderProcessingService
 {
     private readonly SmartDbContext _db;
     private readonly IWorkContext _workContext;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly IAppUserCustomerService _appUserCustomerService;
+    private readonly IAppUserBuyerContext _appUserBuyerContext;
     private readonly IWebHelper _webHelper;
     private readonly ILocalizationService _localizationService;
     private readonly ICurrencyService _currencyService;
@@ -90,7 +93,10 @@ public partial class OrderProcessingService : IOrderProcessingService
         ShoppingCartSettings shoppingCartSettings,
         LocalizationSettings localizationSettings,
         TaxSettings taxSettings,
-        PaymentSettings paymentSettings)
+        PaymentSettings paymentSettings,
+        ICurrentAppUserContext appUserContext = null,
+        IAppUserCustomerService appUserCustomerService = null,
+        IAppUserBuyerContext appUserBuyerContext = null)
     {
         _db = db;
         _workContext = workContext;
@@ -123,6 +129,9 @@ public partial class OrderProcessingService : IOrderProcessingService
         _localizationSettings = localizationSettings;
         _taxSettings = taxSettings;
         _paymentSettings = paymentSettings;
+        _appUserContext = appUserContext;
+        _appUserCustomerService = appUserCustomerService;
+        _appUserBuyerContext = appUserBuyerContext;
 
         _primaryCurrency = currencyService.PrimaryCurrency;
         _workingCurrency = workContext.WorkingCurrency;

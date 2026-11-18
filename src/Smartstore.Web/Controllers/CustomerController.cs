@@ -58,6 +58,10 @@ public class CustomerController : PublicController
     private readonly OrderSettings _orderSettings;
     private readonly RewardPointsSettings _rewardPointsSettings;
     private readonly ShoppingCartSettings _shoppingCartSettings;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly IAppUserBuyerContext _appUserBuyerContext;
+    private readonly IAppUserProfileService _appUserProfile;
+    private readonly IAppUserAddressBookService _appUserAddressBook;
 
     public CustomerController(
         SmartDbContext db,
@@ -85,7 +89,11 @@ public class CustomerController : PublicController
         LocalizationSettings localizationSettings,
         OrderSettings orderSettings,
         RewardPointsSettings rewardPointsSettings,
-        ShoppingCartSettings shoppingCartSettings)
+        ShoppingCartSettings shoppingCartSettings,
+        ICurrentAppUserContext appUserContext = null,
+        IAppUserBuyerContext appUserBuyerContext = null,
+        IAppUserProfileService appUserProfile = null,
+        IAppUserAddressBookService appUserAddressBook = null)
     {
         _db = db;
         _newsletterSubscriptionService = newsletterSubscriptionService;
@@ -113,6 +121,10 @@ public class CustomerController : PublicController
         _orderSettings = orderSettings;
         _rewardPointsSettings = rewardPointsSettings;
         _shoppingCartSettings = shoppingCartSettings;
+        _appUserContext = appUserContext;
+        _appUserBuyerContext = appUserBuyerContext;
+        _appUserProfile = appUserProfile;
+        _appUserAddressBook = appUserAddressBook;
     }
 
     public async Task<IActionResult> Info()
@@ -133,6 +145,11 @@ public class CustomerController : PublicController
     [SaveChanges<SmartDbContext>(false)]
     public async Task<IActionResult> Info(CustomerInfoModel model)
     {
+        // The legacy customer profile form writes Customer fields and roles.
+        // AppUser-owned edits must use the dedicated user profile endpoint.
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+            return ChallengeOrForbid();
+
         var customer = Services.WorkContext.CurrentCustomer;
         if (!customer.IsRegistered())
         {
@@ -364,16 +381,34 @@ public class CustomerController : PublicController
     public async Task<IActionResult> Addresses()
     {
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
         {
-            return ChallengeOrForbid();
+            if (_appUserProfile is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+
+            var actor = await _appUserContext.GetCurrentUserAsync();
+            var addresses = (await _appUserProfile.GetCurrentUserAddressesAsync()).ToList();
+            // Customer-specific default-address flags must never leak into AppUser views.
+            var personalModels = await addresses.MapAsync(customer, false);
+            foreach (var model in personalModels)
+            {
+                model.DefaultAddressesEnabled = _shoppingCartSettings.QuickCheckoutEnabled;
+                model.IsDefaultBillingAddress = model.Id == actor.DefaultBillingAddressId;
+                model.IsDefaultShippingAddress = model.Id == actor.DefaultShippingAddressId;
+            }
+            return View(personalModels);
         }
+
+        if (!customer.IsRegistered())
+            return ChallengeOrForbid();
 
         var models = await customer.Addresses.MapAsync(customer, _shoppingCartSettings.QuickCheckoutEnabled);
 
         return View(models);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddressDelete(int id)
     {
         if (id < 1)
@@ -382,10 +417,17 @@ public class CustomerController : PublicController
         }
 
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
         {
-            return ChallengeOrForbid();
+            if (_appUserAddressBook is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+
+            await _appUserAddressBook.RemoveAddressAsync(id);
+            return RedirectToAction(nameof(Addresses));
         }
+
+        if (!customer.IsRegistered())
+            return ChallengeOrForbid();
 
         // Find address and ensure that it belongs to the current customer.
         var address = customer.Addresses.Where(a => a.Id == id).FirstOrDefault();
@@ -403,12 +445,18 @@ public class CustomerController : PublicController
     public async Task<IActionResult> AddressAdd()
     {
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            if (_appUserAddressBook is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+        }
+        else if (!customer.IsRegistered())
         {
             return ChallengeOrForbid();
         }
 
-        var model = await new Address().MapAsync(customer, _shoppingCartSettings.QuickCheckoutEnabled);
+        var model = await new Address().MapAsync(customer,
+            _appUserContext?.IsAppUserIdentityPresent == true ? false : _shoppingCartSettings.QuickCheckoutEnabled);
 
         return View(model);
     }
@@ -417,7 +465,13 @@ public class CustomerController : PublicController
     public async Task<IActionResult> AddressAdd(AddressModel model)
     {
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        var appUserSession = _appUserContext?.IsAppUserIdentityPresent == true;
+        if (appUserSession)
+        {
+            if (_appUserAddressBook is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+        }
+        else if (!customer.IsRegistered())
         {
             return ChallengeOrForbid();
         }
@@ -427,8 +481,16 @@ public class CustomerController : PublicController
         if (ModelState.IsValid)
         {
             await model.MapAsync(address, customer);
-            customer.Addresses.Add(address);
-            await _db.SaveChangesAsync();
+            if (appUserSession)
+            {
+                if ((await _appUserAddressBook.AddAddressAsync(address)) is null)
+                    return ChallengeOrForbid();
+            }
+            else
+            {
+                customer.Addresses.Add(address);
+                await _db.SaveChangesAsync();
+            }
 
             return RedirectToAction(nameof(Addresses));
         }
@@ -446,19 +508,27 @@ public class CustomerController : PublicController
         }
 
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        Address address;
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
         {
-            return ChallengeOrForbid();
-        }
+            if (_appUserProfile is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
 
-        // Find address and ensure that it belongs to the current customer.
-        var address = customer.Addresses.Where(a => a.Id == id).FirstOrDefault();
+            address = (await _appUserProfile.GetCurrentUserAddressesAsync()).FirstOrDefault(a => a.Id == id);
+        }
+        else
+        {
+            if (!customer.IsRegistered())
+                return ChallengeOrForbid();
+            address = customer.Addresses.FirstOrDefault(a => a.Id == id);
+        }
         if (address == null)
         {
             return RedirectToAction(nameof(Addresses));
         }
 
-        var model = await address.MapAsync(customer, _shoppingCartSettings.QuickCheckoutEnabled);
+        var model = await address.MapAsync(customer,
+            _appUserContext?.IsAppUserIdentityPresent == true ? false : _shoppingCartSettings.QuickCheckoutEnabled);
 
         return View(model);
     }
@@ -467,13 +537,22 @@ public class CustomerController : PublicController
     public async Task<IActionResult> AddressEdit(AddressModel model, int id)
     {
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        var appUserSession = _appUserContext?.IsAppUserIdentityPresent == true;
+        Address address;
+        if (appUserSession)
         {
-            return ChallengeOrForbid();
-        }
+            if (_appUserProfile is null || _appUserAddressBook is null ||
+                await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
 
-        // Find address and ensure that it belongs to the current customer.
-        var address = customer.Addresses.FirstOrDefault(x => x.Id == id);
+            address = (await _appUserProfile.GetCurrentUserAddressesAsync()).FirstOrDefault(x => x.Id == id);
+        }
+        else
+        {
+            if (!customer.IsRegistered())
+                return ChallengeOrForbid();
+            address = customer.Addresses.FirstOrDefault(x => x.Id == id);
+        }
         if (address == null)
         {
             return RedirectToAction(nameof(Addresses));
@@ -481,8 +560,17 @@ public class CustomerController : PublicController
 
         if (ModelState.IsValid)
         {
-            await model.MapAsync(address, customer, _shoppingCartSettings.QuickCheckoutEnabled);
-            await _db.SaveChangesAsync();
+            // AddressMapper can otherwise change legacy Customer default-address settings.
+            await model.MapAsync(address, customer, appUserSession ? false : _shoppingCartSettings.QuickCheckoutEnabled);
+            if (appUserSession)
+            {
+                if (!await _appUserAddressBook.ReplaceAddressAsync(id, address))
+                    return NotFound();
+            }
+            else
+            {
+                await _db.SaveChangesAsync();
+            }
 
             return RedirectToAction(nameof(Addresses));
         }
@@ -495,6 +583,17 @@ public class CustomerController : PublicController
     [HttpPost]
     public async Task<IActionResult> SetDefaultAddress(int id)
     {
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            if (_appUserAddressBook is null || await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+
+            if (!await _appUserAddressBook.SetDefaultAddressAsync(id))
+                return NotFound();
+
+            return RedirectToAction(nameof(Addresses));
+        }
+
         var customer = Services.WorkContext.CurrentCustomer;
         if (!customer.IsRegistered())
         {
@@ -541,7 +640,23 @@ public class CustomerController : PublicController
         }
 
         var customer = Services.WorkContext.CurrentCustomer;
-        if (!customer.IsRegistered())
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            // Treat the logged-in user and the commercial buyer as separate actors.
+            if (await _appUserContext.GetCurrentUserAsync() is null)
+                return ChallengeOrForbid();
+
+            var buyerId = _appUserBuyerContext is null
+                ? null
+                : await _appUserBuyerContext.GetSelectedCustomerIdAsync();
+            if (!buyerId.HasValue)
+                return ChallengeOrForbid();
+
+            customer = await _db.Customers.FindByIdAsync(buyerId.Value);
+            if (customer is null || customer.Deleted || !customer.Active)
+                return ChallengeOrForbid();
+        }
+        else if (!customer.IsRegistered())
         {
             return ChallengeOrForbid();
         }

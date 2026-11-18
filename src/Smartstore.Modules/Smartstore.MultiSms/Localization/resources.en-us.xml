@@ -1,0 +1,43 @@
+<Language Name="English" IsDefault="false" IsRightToLeft="false">
+    <LocaleResource Name="Plugins.FriendlyName.Smartstore.MultiSms" AppendRootKey="false"><Value>Multi-provider SMS Gateway</Value></LocaleResource>
+    <LocaleResource Name="Plugins.Description.Smartstore.MultiSms" AppendRootKey="false"><Value>Switchable SMS gateway with Kavenegar and Melipayamak</Value></LocaleResource>
+    <LocaleResource Name="Intro"><Value>Configure two independent SMS providers. Changes take effect on the next message without restarting. Failover occurs only on explicit rejection; ambiguous timeouts are never retried automatically.</Value></LocaleResource>
+    <LocaleResource Name="SecretHint"><Value>Leave blank to keep the stored secret; use Clear to remove it. Credentials are encrypted in settings.</Value></LocaleResource>
+    <LocaleResource Name="SecretConfigured"><Value>A secret is configured.</Value></LocaleResource>
+    <LocaleResource Name="SecretMissing"><Value>No secret is configured.</Value></LocaleResource>
+    <LocaleResource Name="TestTitle"><Value>Send a test SMS</Value></LocaleResource>
+    <LocaleResource Name="TestHint"><Value>Tests use SAVED settings, not unsubmitted form changes. An accepted response does not confirm handset delivery.</Value></LocaleResource>
+    <LocaleResource Name="SendTest"><Value>Send test SMS</Value></LocaleResource>
+    <LocaleResource Name="Fields.Enabled"><Value>Enable SMS Gateway</Value></LocaleResource>
+    <LocaleResource Name="Fields.Enabled.Hint"><Value>Enable SMS Gateway</Value></LocaleResource>
+    <LocaleResource Name="Fields.PrimaryProvider"><Value>Primary provider</Value></LocaleResource>
+    <LocaleResource Name="Fields.PrimaryProvider.Hint"><Value>Primary provider</Value></LocaleResource>
+    <LocaleResource Name="Fields.EnableFailover"><Value>Enable safe failover</Value></LocaleResource>
+    <LocaleResource Name="Fields.EnableFailover.Hint"><Value>Enable safe failover</Value></LocaleResource>
+    <LocaleResource Name="Fields.FallbackProvider"><Value>Fallback provider</Value></LocaleResource>
+    <LocaleResource Name="Fields.FallbackProvider.Hint"><Value>Fallback provider</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarEnabled"><Value>Enable Kavenegar</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarEnabled.Hint"><Value>Enable Kavenegar</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarSender"><Value>Kavenegar sender</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarSender.Hint"><Value>Kavenegar sender</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewKavenegarApiKey"><Value>New Kavenegar API key</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewKavenegarApiKey.Hint"><Value>New Kavenegar API key</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearKavenegarApiKey"><Value>Clear Kavenegar API key</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearKavenegarApiKey.Hint"><Value>Clear Kavenegar API key</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakEnabled"><Value>Enable Melipayamak</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakEnabled.Hint"><Value>Enable Melipayamak</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakSender"><Value>Melipayamak sender</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakSender.Hint"><Value>Melipayamak sender</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakUsername"><Value>Melipayamak username</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakUsername.Hint"><Value>Melipayamak username</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewMelipayamakPassword"><Value>New Melipayamak password</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewMelipayamakPassword.Hint"><Value>New Melipayamak password</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearMelipayamakPassword"><Value>Clear Melipayamak password</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearMelipayamakPassword.Hint"><Value>Clear Melipayamak password</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestPhone"><Value>Recipient mobile number</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestPhone.Hint"><Value>Recipient mobile number</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestMessage"><Value>Test message</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestMessage.Hint"><Value>Test message</Value></LocaleResource>
+    <LocaleResource Name="TestAccepted"><Value>Provider {0} accepted the SMS (message ID {1}). Delivery to the handset is not yet confirmed.</Value></LocaleResource>
+    <LocaleResource Name="TestRejected"><Value>The SMS was not confirmed. Check your provider configuration and the application logs.</Value></LocaleResource>
+</Language>

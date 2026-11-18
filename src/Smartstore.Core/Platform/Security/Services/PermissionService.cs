@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Microsoft.AspNetCore.Http;
 using Smartstore.Caching;
 using Smartstore.Collections;
 using Smartstore.Core.Data;
@@ -94,6 +95,8 @@ public partial class PermissionService : AsyncDbSaveHook<CustomerRole>, IPermiss
     private readonly Lazy<IWorkContext> _workContext;
     private readonly ILocalizationService _localizationService;
     private readonly ICacheManager _cache;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     private string _hookErrorMessage;
 
@@ -101,12 +104,16 @@ public partial class PermissionService : AsyncDbSaveHook<CustomerRole>, IPermiss
         SmartDbContext db,
         Lazy<IWorkContext> workContext,
         ILocalizationService localizationService,
-        ICacheManager cache)
+        ICacheManager cache,
+        ICurrentAppUserContext appUserContext = null,
+        IHttpContextAccessor httpContextAccessor = null)
     {
         _db = db;
         _workContext = workContext;
         _localizationService = localizationService;
         _cache = cache;
+        _appUserContext = appUserContext;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     #region Hook
@@ -167,6 +174,53 @@ public partial class PermissionService : AsyncDbSaveHook<CustomerRole>, IPermiss
             return false;
         }
 
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            // Only an independent AppUser cookie can supply a person's roles.
+            // A legacy Customer claim is detected and denied rather than used.
+            var principal = _httpContextAccessor?.HttpContext?.User;
+            var native = principal?.Identities.Where(x => x.IsAuthenticated &&
+                x.AuthenticationType == AppUserAuthenticationDefaults.Scheme).ToArray() ?? [];
+            if (native.Length != 1)
+                return false;
+
+            var guids = native[0].Claims.Where(x =>
+                x.Type == AppUserAuthenticationDefaults.GuidClaim &&
+                x.Issuer == AppUserAuthenticationDefaults.Issuer).ToArray();
+            var stamps = native[0].Claims.Where(x =>
+                x.Type == AppUserAuthenticationDefaults.SecurityStampClaim &&
+                x.Issuer == AppUserAuthenticationDefaults.Issuer).ToArray();
+            if (guids.Length != 1 || stamps.Length != 1 ||
+                !Guid.TryParse(guids[0].Value, out var nativeGuid) ||
+                nativeGuid == Guid.Empty || string.IsNullOrWhiteSpace(stamps[0].Value))
+                return false;
+
+            var nativeMatches = _db.AppUsers.AsNoTracking().Where(x =>
+                x.UserGuid == nativeGuid && x.Active &&
+                x.SecurityStamp == stamps[0].Value).Take(2).ToArray();
+            var actor = nativeMatches.Length == 1 ? nativeMatches[0] : null;
+            if (actor is null)
+                return false;
+
+            // A selected buyer can never confer roles on the authenticated person.
+            var key = $"permission:appuser:{actor.Id}.{allowByDescendantPermission}.{permissionSystemName}";
+            return _cache.Get(key, o =>
+            {
+                o.ExpiresIn(TimeSpan.FromSeconds(30));
+                var roleIds = _db.AppUserRoleMappings.AsNoTracking()
+                    .Where(x => x.AppUserId == actor.Id).Select(x => x.CustomerRoleId);
+                var roles = _db.CustomerRoles.AsNoTracking()
+                    .Where(x => roleIds.Contains(x.Id) && x.Active).ToArray();
+
+                foreach (var role in roles)
+                {
+                    if (AuthorizeInternal(GetPermissionTree(role), permissionSystemName, allowByDescendantPermission))
+                        return true;
+                }
+                return false;
+            });
+        }
+
         customer ??= _workContext.Value.CurrentCustomer;
 
         var cacheKey = $"permission:{customer.Id}.{allowByDescendantPermission}.{permissionSystemName}";
@@ -201,6 +255,31 @@ public partial class PermissionService : AsyncDbSaveHook<CustomerRole>, IPermiss
         if (string.IsNullOrEmpty(permissionSystemName))
         {
             return false;
+        }
+
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+        {
+            var actor = await _appUserContext.GetCurrentUserAsync();
+            if (actor is null)
+                return false;
+
+            var key = $"permission:appuser:{actor.Id}.{allowByDescendantPermission}.{permissionSystemName}";
+            return await _cache.GetAsync(key, async o =>
+            {
+                o.ExpiresIn(TimeSpan.FromSeconds(30));
+                var roleIds = _db.AppUserRoleMappings.AsNoTracking()
+                    .Where(x => x.AppUserId == actor.Id).Select(x => x.CustomerRoleId);
+                var roles = await _db.CustomerRoles.AsNoTracking()
+                    .Where(x => roleIds.Contains(x.Id) && x.Active).ToArrayAsync();
+
+                foreach (var role in roles)
+                {
+                    var tree = await GetPermissionTreeAsync(role);
+                    if (AuthorizeInternal(tree.Permissions, permissionSystemName, allowByDescendantPermission))
+                        return true;
+                }
+                return false;
+            }, independent: true, allowRecursion: true);
         }
 
         customer ??= _workContext.Value.CurrentCustomer;

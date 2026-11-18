@@ -25,6 +25,9 @@ public partial class CustomerContent : BaseEntity, IAuditable
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>Actual user who authored this content or product review.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

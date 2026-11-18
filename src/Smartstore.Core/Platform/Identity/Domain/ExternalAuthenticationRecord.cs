@@ -14,6 +14,9 @@ public partial class ExternalAuthenticationRecord : BaseEntity
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>User owning the external login, independent of a buyer account.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

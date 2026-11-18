@@ -47,6 +47,11 @@ public partial class ShoppingCartItem : EntityWithAttributes, IAuditable, IAttri
     public int CustomerId { get; set; }
 
     /// <summary>
+    /// Independent user owning this cart entry; CustomerId is a legacy compatibility field.
+    /// </summary>
+    public int? AppUserId { get; set; }
+
+    /// <summary>
     /// Gets or sets the product identifier
     /// </summary>
 		public int ProductId { get; set; }

@@ -15,6 +15,9 @@ public class RewardPointsHistory : BaseEntity
     /// </summary>
     public int CustomerId { get; set; }
 
+    /// <summary>Owner of individual reward points after the user cutover.</summary>
+    public int? AppUserId { get; set; }
+
     private Customer _customer;
     /// <summary>
     /// Gets or sets the customer.

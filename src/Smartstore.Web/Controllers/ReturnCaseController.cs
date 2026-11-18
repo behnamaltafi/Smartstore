@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Smartstore.Core.Checkout.Orders;
+using Smartstore.Core.Identity;
 using Smartstore.Core.Localization;
 using Smartstore.Core.Messaging;
 using Smartstore.Core.Seo.Routing;
@@ -17,19 +18,37 @@ public class ReturnCaseController : PublicController
     private readonly IMessageFactory _messageFactory;
     private readonly OrderSettings _orderSettings;
     private readonly LocalizationSettings _localizationSettings;
+    private readonly ICurrentAppUserContext _appUserContext;
+    private readonly IAppUserOrderAccessService _appUserOrderAccess;
 
     public ReturnCaseController(
         SmartDbContext db,
         IOrderProcessingService orderProcessingService,
         IMessageFactory messageFactory,
         OrderSettings orderSettings,
-        LocalizationSettings localizationSettings)
+        LocalizationSettings localizationSettings,
+        ICurrentAppUserContext appUserContext = null,
+        IAppUserOrderAccessService appUserOrderAccess = null)
     {
         _db = db;
         _orderProcessingService = orderProcessingService;
         _messageFactory = messageFactory;
         _orderSettings = orderSettings;
         _localizationSettings = localizationSettings;
+        _appUserContext = appUserContext;
+        _appUserOrderAccess = appUserOrderAccess;
+    }
+
+    private async Task<bool> CanAccessReturnOrderAsync(Order order)
+    {
+        if (order is null || order.Deleted)
+            return false;
+
+        if (_appUserContext?.IsAppUserIdentityPresent == true)
+            return _appUserOrderAccess is not null &&
+                await _appUserOrderAccess.CanAccessOrderAsync(order.Id);
+
+        return order.CustomerId == Services.WorkContext.CurrentCustomer.Id;
     }
 
     [DisallowRobot]
@@ -46,7 +65,7 @@ public class ReturnCaseController : PublicController
             return NotFound();
         }
 
-        if (order.CustomerId != Services.WorkContext.CurrentCustomer.Id)
+        if (!await CanAccessReturnOrderAsync(order))
         {
             return ChallengeOrForbid();
         }
@@ -76,7 +95,7 @@ public class ReturnCaseController : PublicController
             return NotFound();
         }
 
-        if (order.CustomerId != Services.WorkContext.CurrentCustomer.Id)
+        if (!await CanAccessReturnOrderAsync(order))
         {
             return ChallengeOrForbid();
         }
@@ -85,6 +104,12 @@ public class ReturnCaseController : PublicController
         {
             return RedirectToRoute("Homepage");
         }
+
+        var appUser = _appUserContext?.IsAppUserIdentityPresent == true
+            ? await _appUserContext.GetCurrentUserAsync()
+            : null;
+        if (_appUserContext?.IsAppUserIdentityPresent == true && appUser is null)
+            return ChallengeOrForbid();
 
         var items = order.OrderItems
             .Select(oi =>
@@ -118,6 +143,7 @@ public class ReturnCaseController : PublicController
                         OrderItemId = oi.Id,
                         Quantity = quantity,
                         CustomerId = order.CustomerId,
+                        AppUserId = appUser?.Id,
                         ReasonForReturn = model.ReturnReason,
                         RequestedAction = model.ReturnAction,
                         CustomerComments = model.Comments,

@@ -21,7 +21,7 @@ public class DbFactoryOptionsExtension : IDbContextOptionsExtension
     {
         _options = options;
 
-        var appConfig = EngineContext.Current.Application.Services.ResolveOptional<SmartConfiguration>();
+        var appConfig = EngineContext.Current?.Application?.Services?.ResolveOptional<SmartConfiguration>();
         CommandTimeout = appConfig?.DbCommandTimeout;
         DefaultSchema = appConfig?.DbDefaultSchema.NullEmpty();
     }
