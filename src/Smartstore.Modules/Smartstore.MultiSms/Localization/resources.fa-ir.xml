@@ -1,0 +1,43 @@
+<Language Name="فارسی" IsDefault="false" IsRightToLeft="true">
+    <LocaleResource Name="Plugins.FriendlyName.Smartstore.MultiSms" AppendRootKey="false"><Value>درگاه پیامک چندتأمین‌کننده</Value></LocaleResource>
+    <LocaleResource Name="Plugins.Description.Smartstore.MultiSms" AppendRootKey="false"><Value>ارسال پیامک با کاوه‌نگار و ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Intro"><Value>دو تأمین‌کننده پیامک را تنظیم کنید. تغییر تأمین‌کننده بدون راه‌اندازی مجدد اعمال می‌شود. تغییر مسیر خودکار فقط در صورت رد قطعی ارسال انجام می‌شود.</Value></LocaleResource>
+    <LocaleResource Name="SecretHint"><Value>برای حفظ کلید قبلی، این فیلد را خالی بگذارید. برای حذف کلید از گزینه حذف استفاده کنید.</Value></LocaleResource>
+    <LocaleResource Name="SecretConfigured"><Value>کلید قبلاً تنظیم شده است.</Value></LocaleResource>
+    <LocaleResource Name="SecretMissing"><Value>هنوز کلیدی تنظیم نشده است.</Value></LocaleResource>
+    <LocaleResource Name="TestTitle"><Value>ارسال پیامک آزمایشی</Value></LocaleResource>
+    <LocaleResource Name="TestHint"><Value>تست با تنظیمات ذخیره‌شده انجام می‌شود، نه تغییرات ذخیره‌نشده همین صفحه.</Value></LocaleResource>
+    <LocaleResource Name="SendTest"><Value>ارسال پیامک آزمایشی</Value></LocaleResource>
+    <LocaleResource Name="Fields.Enabled"><Value>فعال‌سازی درگاه پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.Enabled.Hint"><Value>فعال‌سازی درگاه پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.PrimaryProvider"><Value>تأمین‌کننده اصلی</Value></LocaleResource>
+    <LocaleResource Name="Fields.PrimaryProvider.Hint"><Value>تأمین‌کننده اصلی</Value></LocaleResource>
+    <LocaleResource Name="Fields.EnableFailover"><Value>تغییر مسیر امن در صورت خطا</Value></LocaleResource>
+    <LocaleResource Name="Fields.EnableFailover.Hint"><Value>تغییر مسیر امن در صورت خطا</Value></LocaleResource>
+    <LocaleResource Name="Fields.FallbackProvider"><Value>تأمین‌کننده جایگزین</Value></LocaleResource>
+    <LocaleResource Name="Fields.FallbackProvider.Hint"><Value>تأمین‌کننده جایگزین</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarEnabled"><Value>فعال‌سازی کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarEnabled.Hint"><Value>فعال‌سازی کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarSender"><Value>شماره فرستنده کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.KavenegarSender.Hint"><Value>شماره فرستنده کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewKavenegarApiKey"><Value>کلید API جدید کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewKavenegarApiKey.Hint"><Value>کلید API جدید کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearKavenegarApiKey"><Value>پاک کردن کلید کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearKavenegarApiKey.Hint"><Value>پاک کردن کلید کاوه‌نگار</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakEnabled"><Value>فعال‌سازی ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakEnabled.Hint"><Value>فعال‌سازی ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakSender"><Value>شماره فرستنده ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakSender.Hint"><Value>شماره فرستنده ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakUsername"><Value>نام کاربری ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.MelipayamakUsername.Hint"><Value>نام کاربری ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewMelipayamakPassword"><Value>رمز جدید ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.NewMelipayamakPassword.Hint"><Value>رمز جدید ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearMelipayamakPassword"><Value>پاک کردن رمز ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.ClearMelipayamakPassword.Hint"><Value>پاک کردن رمز ملی‌پیامک</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestPhone"><Value>شماره موبایل مقصد</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestPhone.Hint"><Value>شماره موبایل مقصد</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestMessage"><Value>متن پیامک آزمایشی</Value></LocaleResource>
+    <LocaleResource Name="Fields.TestMessage.Hint"><Value>متن پیامک آزمایشی</Value></LocaleResource>
+    <LocaleResource Name="TestAccepted"><Value>تأمین‌کننده {0} پیامک را پذیرفت (شناسه پیام {1}). تحویل به موبایل هنوز تأیید نشده است.</Value></LocaleResource>
+    <LocaleResource Name="TestRejected"><Value>ارسال پیامک تأیید نشد. تنظیمات تأمین‌کننده و گزارش‌های برنامه را بررسی کنید.</Value></LocaleResource>
+</Language>

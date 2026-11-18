@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <Product>Smartstore Multi-Provider SMS Gateway</Product>
+    <OutputPath>..\..\Smartstore.Web\Modules\Smartstore.MultiSms</OutputPath>
+    <OutDir>$(OutputPath)</OutDir>
+  </PropertyGroup>
+</Project>

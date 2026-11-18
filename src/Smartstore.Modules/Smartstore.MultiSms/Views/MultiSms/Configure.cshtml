@@ -1,0 +1,184 @@
+@model ConfigurationModel
+
+@{
+    Layout = "_ConfigureModule";
+}
+
+<widget target-zone="admin_button_toolbar_before">
+    <button id="SaveConfigButton" type="submit" name="save" class="btn btn-primary" value="save" form="sms-gateway-settings">
+        <icon name="check" />
+        <span>@T("Admin.Common.Save")</span>
+    </button>
+</widget>
+
+<div class="alert alert-info">
+    @T("Plugins.Sms.MultiSms.Intro")
+</div>
+
+<form id="sms-gateway-settings" asp-action="Configure" method="post" autocomplete="off">
+    <div asp-validation-summary="All"></div>
+    <div class="adminContent">
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="Enabled" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="Enabled" />
+                <span asp-validation-for="Enabled"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="PrimaryProvider" />
+            </div>
+            <div class="adminData">
+                <select asp-for="PrimaryProvider" class="form-control">
+                    @foreach (var provider in Model.AvailableProviders)
+                    {
+                        <option value="@provider">@provider</option>
+                    }
+                </select>
+                <span asp-validation-for="PrimaryProvider"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="EnableFailover" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="EnableFailover" />
+                <span asp-validation-for="EnableFailover"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="FallbackProvider" />
+            </div>
+            <div class="adminData">
+                <select asp-for="FallbackProvider" class="form-control">
+                    @foreach (var provider in Model.AvailableProviders)
+                    {
+                        <option value="@provider">@provider</option>
+                    }
+                </select>
+                <span asp-validation-for="FallbackProvider"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="KavenegarEnabled" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="KavenegarEnabled" />
+                <span asp-validation-for="KavenegarEnabled"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="KavenegarSender" />
+            </div>
+            <div class="adminData">
+                <input asp-for="KavenegarSender" class="form-control" />
+                <span asp-validation-for="KavenegarSender"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="NewKavenegarApiKey" />
+            </div>
+            <div class="adminData">
+                <input asp-for="NewKavenegarApiKey" class="form-control" type="password" autocomplete="new-password" value="" />
+                <small class="form-text text-muted">@T("Plugins.Sms.MultiSms.SecretHint")</small>
+                <small class="form-text text-muted">@(Model.HasKavenegarApiKey ? T("Plugins.Sms.MultiSms.SecretConfigured") : T("Plugins.Sms.MultiSms.SecretMissing"))</small>
+                <span asp-validation-for="NewKavenegarApiKey"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="ClearKavenegarApiKey" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="ClearKavenegarApiKey" />
+                <span asp-validation-for="ClearKavenegarApiKey"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="MelipayamakEnabled" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="MelipayamakEnabled" />
+                <span asp-validation-for="MelipayamakEnabled"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="MelipayamakSender" />
+            </div>
+            <div class="adminData">
+                <input asp-for="MelipayamakSender" class="form-control" />
+                <span asp-validation-for="MelipayamakSender"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="MelipayamakUsername" />
+            </div>
+            <div class="adminData">
+                <input asp-for="MelipayamakUsername" class="form-control" />
+                <span asp-validation-for="MelipayamakUsername"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="NewMelipayamakPassword" />
+            </div>
+            <div class="adminData">
+                <input asp-for="NewMelipayamakPassword" class="form-control" type="password" autocomplete="new-password" value="" />
+                <small class="form-text text-muted">@T("Plugins.Sms.MultiSms.SecretHint")</small>
+                <small class="form-text text-muted">@(Model.HasMelipayamakPassword ? T("Plugins.Sms.MultiSms.SecretConfigured") : T("Plugins.Sms.MultiSms.SecretMissing"))</small>
+                <span asp-validation-for="NewMelipayamakPassword"></span>
+            </div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle">
+                <smart-label asp-for="ClearMelipayamakPassword" />
+            </div>
+            <div class="adminData">
+                <setting-editor asp-for="ClearMelipayamakPassword" />
+                <span asp-validation-for="ClearMelipayamakPassword"></span>
+            </div>
+        </div>
+    </div>
+</form>
+
+<hr />
+<h4>@T("Plugins.Sms.MultiSms.TestTitle")</h4>
+<p class="text-muted">@T("Plugins.Sms.MultiSms.TestHint")</p>
+<form asp-action="TestSms" method="post" autocomplete="off">
+    <div class="adminContent">
+        <div class="adminRow">
+            <div class="adminTitle"><smart-label asp-for="TestPhone" /></div>
+            <div class="adminData"><input asp-for="TestPhone" class="form-control" autocomplete="off" /></div>
+        </div>
+        <div class="adminRow">
+            <div class="adminTitle"><smart-label asp-for="TestMessage" /></div>
+            <div class="adminData"><textarea asp-for="TestMessage" class="form-control" rows="2"></textarea></div>
+        </div>
+        @if (Model.TestSucceeded.HasValue)
+        {
+            <div class="adminRow">
+                <div class="adminData">
+                    <div class="alert @(Model.TestSucceeded.Value ? "alert-success" : "alert-danger")">
+                        @Model.TestResult
+                    </div>
+                </div>
+            </div>
+        }
+        <div class="adminRow">
+            <div class="adminData">
+                <button type="submit" class="btn btn-secondary">@T("Plugins.Sms.MultiSms.SendTest")</button>
+            </div>
+        </div>
+    </div>
+</form>
