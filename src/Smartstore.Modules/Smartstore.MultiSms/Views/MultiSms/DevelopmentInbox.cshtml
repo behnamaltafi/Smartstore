@@ -1,0 +1,37 @@
+@model IReadOnlyList<Smartstore.MultiSms.Services.DevelopmentSmsEnvelope>
+@{
+    Layout = "~/Areas/Admin/Views/Shared/Layouts/_AdminLayout.cshtml";
+    ViewBag.Title = T("Plugins.Sms.MultiSms.DevInboxTitle").Value;
+}
+<div class="section-header">
+    <div class="title">@T("Plugins.Sms.MultiSms.DevInboxTitle")</div>
+    <div class="options">
+        <a asp-action="Configure" class="btn btn-secondary">@T("Plugins.Sms.MultiSms.SettingsLink")</a>
+        <a asp-action="DevelopmentInbox" class="btn btn-primary">@T("Plugins.Sms.MultiSms.RefreshInbox")</a>
+    </div>
+</div>
+
+<div class="alert alert-warning">@T("Plugins.Sms.MultiSms.DevInboxWarning")</div>
+<div class="table-responsive">
+<table class="table table-striped">
+    <thead><tr>
+        <th>@T("Plugins.Sms.MultiSms.HistoryDate")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryPhone")</th>
+        <th>@T("Plugins.Sms.MultiSms.DevInboxMessage")</th>
+    </tr></thead>
+    <tbody>
+    @foreach (var item in Model)
+    {
+        <tr>
+            <td>@item.CreatedOnUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+            <td dir="ltr">@item.Phone</td>
+            <td style="white-space:pre-wrap">@item.Message</td>
+        </tr>
+    }
+    @if (Model.Count == 0)
+    {
+        <tr><td colspan="3" class="text-muted">@T("Plugins.Sms.MultiSms.DevInboxEmpty")</td></tr>
+    }
+    </tbody>
+</table>
+</div>

@@ -1,0 +1,12 @@
+@{
+    var returnUrl = Context.Request.Query["returnUrl"].ToString();
+}
+
+<div class="mt-3 text-center">
+    <a asp-controller="SmsLogin" asp-action="Index" asp-route-returnUrl="@(Url.IsLocalUrl(returnUrl) ? returnUrl : null)" class="btn btn-outline-secondary btn-lg btn-block">
+        @T("Plugins.Sms.MultiSms.Otp.LoginTitle")
+    </a>
+    <a asp-controller="SmsLogin" asp-action="Enroll" class="d-block mt-2">
+        @T("Plugins.Sms.MultiSms.Otp.EnrollLink")
+    </a>
+</div>

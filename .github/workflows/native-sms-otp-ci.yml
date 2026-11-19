@@ -1,0 +1,41 @@
+name: Native Smartstore SMS OTP - build and tests
+
+on:
+  push:
+    branches: [feature/native-sms-otp-login]
+    paths:
+      - 'src/Smartstore.Modules/Smartstore.MultiSms/**'
+      - 'src/Smartstore.Core/Platform/Messaging/Services/ISmsSender.cs'
+      - 'test/Smartstore.Core.Tests/**'
+      - '.github/workflows/native-sms-otp-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/Smartstore.Modules/Smartstore.MultiSms/**'
+      - 'src/Smartstore.Core/Platform/Messaging/Services/ISmsSender.cs'
+      - 'Smartstore.sln'
+      - 'test/Smartstore.Core.Tests/**'
+      - '.github/workflows/native-sms-otp-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  MSBUILDTERMINALLOGGER: 'off'
+
+jobs:
+  compile-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build full Smartstore solution and SMS module
+        run: dotnet build Smartstore.sln -c Release -p:SmartstoreBuildRuntime=linux-x64 --no-self-contained
+      - name: Test OTP, provider failover, mock isolation, history helpers and API
+        run: dotnet test test/Smartstore.Core.Tests/Smartstore.Core.Tests.csproj -c Release -p:SmartstoreBuildRuntime=linux-x64 --no-build --no-restore --filter "FullyQualifiedName~SmsGatewaySenderTests|FullyQualifiedName~SmsPhoneNormalizerTests|FullyQualifiedName~SmsMockAndHistoryTests|FullyQualifiedName~SmsHistoryTransportTests|FullyQualifiedName~SmsApiControllerTests|FullyQualifiedName~SmsLoginWidgetSourceTests|FullyQualifiedName~SmsPrimaryLoginFilterTests"

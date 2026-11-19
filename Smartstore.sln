@@ -61,6 +61,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smartstore.Shipping", "src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smartstore.Clickatell", "src\Smartstore.Modules\Smartstore.Clickatell\Smartstore.Clickatell.csproj", "{54FBCDEA-FF29-4988-A699-F1592C790DA3}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smartstore.MultiSms", "src\Smartstore.Modules\Smartstore.MultiSms\Smartstore.MultiSms.csproj", "{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smartstore.ShippingByWeight", "src\Smartstore.Modules\Smartstore.ShippingByWeight\Smartstore.ShippingByWeight.csproj", "{BEA9D71F-6B39-4B68-909F-868B9E53038E}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Smartstore.Google.Analytics", "src\Smartstore.Modules\Smartstore.Google.Analytics\Smartstore.Google.Analytics.csproj", "{290CAB7D-A6AD-4605-A59D-91A1921213E2}"
@@ -92,6 +94,12 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.DebugNoRazorCompile|Any CPU.ActiveCfg = DebugNoRazorCompile|Any CPU
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.DebugNoRazorCompile|Any CPU.Build.0 = DebugNoRazorCompile|Any CPU
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19}.Release|Any CPU.Build.0 = Release|Any CPU
 		{25E0AA77-1B48-4F6E-B42F-9F428ED968D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{25E0AA77-1B48-4F6E-B42F-9F428ED968D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25E0AA77-1B48-4F6E-B42F-9F428ED968D1}.DebugNoRazorCompile|Any CPU.ActiveCfg = DebugNoRazorCompile|Any CPU
@@ -283,6 +291,7 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{9F3C99A6-35B4-4C66-BD2A-6A8DF9630A19} = {E5C1AA43-6B44-4EFA-8DE9-6070EE007CE3}
 		{1F0EDB0F-8A4D-4E0A-8DDA-DA999276033D} = {B3391994-AE0F-4C8C-AE8E-968F6013B4B6}
 		{03D6513D-C334-4AD8-8469-692E2E7E4121} = {B3391994-AE0F-4C8C-AE8E-968F6013B4B6}
 		{C1484772-1A5F-4077-BFE2-7278240B303D} = {B3391994-AE0F-4C8C-AE8E-968F6013B4B6}

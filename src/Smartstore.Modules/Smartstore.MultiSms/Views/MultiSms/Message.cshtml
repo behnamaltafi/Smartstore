@@ -1,0 +1,57 @@
+@model SmsHistoryDetailsModel
+@using Smartstore.MultiSms.Services
+@{
+    Layout = "~/Areas/Admin/Views/Shared/Layouts/_AdminLayout.cshtml";
+    ViewBag.Title = T("Plugins.Sms.MultiSms.HistoryDetails").Value;
+}
+<div class="section-header">
+    <div class="title">@T("Plugins.Sms.MultiSms.HistoryDetails") — #@Model.Message.Id</div>
+    <div class="options">
+        <a asp-action="History" class="btn btn-secondary">@T("Plugins.Sms.MultiSms.HistoryTitle")</a>
+    </div>
+</div>
+
+<div class="card mb-4"><div class="card-body">
+    <dl class="row">
+        <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryPhone")</dt>
+        <dd class="col-md-9" dir="ltr">@SmsHistoryFormatter.MaskPhone(Model.Message.Phone)</dd>
+        <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryKind")</dt>
+        <dd class="col-md-9">@Model.Message.Kind</dd>
+        <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryStatus")</dt>
+        <dd class="col-md-9">@Model.Message.Status</dd>
+        <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryProvider")</dt>
+        <dd class="col-md-9">@Model.Message.Provider</dd>
+        <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryDate")</dt>
+        <dd class="col-md-9">@Model.Message.CreatedOnUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</dd>
+        @if (!string.IsNullOrWhiteSpace(Model.Message.Body) && Model.Message.Kind == "General")
+        {
+            <dt class="col-md-3">@T("Plugins.Sms.MultiSms.HistoryBody")</dt>
+            <dd class="col-md-9" style="white-space:pre-wrap">@Model.Message.Body</dd>
+        }
+    </dl>
+</div></div>
+
+<h4>@T("Plugins.Sms.MultiSms.HistoryAttempts")</h4>
+<table class="table table-striped">
+<thead><tr>
+    <th>@T("Plugins.Sms.MultiSms.HistoryDate")</th>
+    <th>@T("Plugins.Sms.MultiSms.HistoryProvider")</th>
+    <th>@T("Plugins.Sms.MultiSms.HistoryStatus")</th>
+    <th>@T("Plugins.Sms.MultiSms.HistoryDuration")</th>
+    <th>@T("Plugins.Sms.MultiSms.HistoryMessageId")</th>
+    <th>@T("Plugins.Sms.MultiSms.HistoryError")</th>
+</tr></thead>
+<tbody>
+@foreach (var attempt in Model.Attempts)
+{
+    <tr>
+        <td>@attempt.StartedOnUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+        <td>@attempt.Provider</td>
+        <td>@attempt.Status</td>
+        <td>@attempt.DurationMs ms</td>
+        <td>@attempt.ProviderMessageId</td>
+        <td>@attempt.ErrorCategory</td>
+    </tr>
+}
+</tbody>
+</table>

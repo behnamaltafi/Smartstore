@@ -1,0 +1,52 @@
+@model SmsProfileModel
+
+@{
+    Layout = "_Layout";
+    Assets.AppendTitleParts(T("Plugins.Sms.MultiSms.Otp.ProfileTitle").Value);
+    Assets.AddMetaRobots();
+}
+
+<div class="page login-page">
+    <div class="row justify-content-center my-4">
+        <div class="col-12 col-md-8 col-xl-6">
+            <h1 class="page-title">@T("Plugins.Sms.MultiSms.Otp.ProfileTitle")</h1>
+            <p class="text-muted">@T("Plugins.Sms.MultiSms.Otp.ProfileHint")</p>
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+                    <form asp-controller="SmsLogin" asp-action="SaveProfile" method="post">
+                        <input type="hidden" asp-for="ReturnUrl" />
+                        <div class="form-floating mb-3">
+                            <input asp-for="Phone" class="form-control" dir="ltr" readonly />
+                            <label asp-for="Phone">@T("Plugins.Sms.MultiSms.Otp.PhoneLabel")</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input asp-for="Username" class="form-control" maxlength="100" required />
+                            <label asp-for="Username">@T("Plugins.Sms.MultiSms.Otp.UsernameLabel")</label>
+                            <span asp-validation-for="Username" class="text-danger"></span>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input asp-for="FirstName" class="form-control" maxlength="225" />
+                            <label asp-for="FirstName">@T("Plugins.Sms.MultiSms.Otp.FirstNameLabel")</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input asp-for="LastName" class="form-control" maxlength="225" />
+                            <label asp-for="LastName">@T("Plugins.Sms.MultiSms.Otp.LastNameLabel")</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input asp-for="Email" type="email" class="form-control" maxlength="500"
+                                   autocomplete="email" />
+                            <label asp-for="Email">@T("Plugins.Sms.MultiSms.Otp.EmailOptionalLabel")</label>
+                            <span asp-validation-for="Email" class="text-danger"></span>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            @T("Plugins.Sms.MultiSms.Otp.SaveProfile")
+                        </button>
+                    </form>
+                    <hr />
+                    @await Component.InvokeAsync("SmsProfileLink")
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

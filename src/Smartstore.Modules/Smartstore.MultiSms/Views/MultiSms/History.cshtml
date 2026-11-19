@@ -1,0 +1,105 @@
+@model SmsHistoryModel
+@using Smartstore.MultiSms.Services
+@{
+    Layout = "~/Areas/Admin/Views/Shared/Layouts/_AdminLayout.cshtml";
+    ViewBag.Title = T("Plugins.Sms.MultiSms.HistoryTitle").Value;
+}
+
+<div class="section-header">
+    <div class="title"><icon name="message-square" /> @T("Plugins.Sms.MultiSms.HistoryTitle")</div>
+    <div class="options">
+        <a asp-controller="MultiSms" asp-action="Configure" asp-area="Admin" class="btn btn-secondary">@T("Plugins.Sms.MultiSms.SettingsLink")</a>
+    </div>
+</div>
+
+<div class="alert alert-info">@T("Plugins.Sms.MultiSms.HistoryHint")</div>
+
+<form method="get" asp-controller="MultiSms" asp-action="History" asp-area="Admin" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <label for="HistoryPhone">@T("Plugins.Sms.MultiSms.HistoryPhone")</label>
+        <input id="HistoryPhone" name="phone" value="@Model.Phone" class="form-control" autocomplete="off" placeholder="09123456789" />
+    </div>
+    <div class="col-md-3">
+        <label for="HistoryKind">@T("Plugins.Sms.MultiSms.HistoryKind")</label>
+        <select id="HistoryKind" name="kind" class="form-control">
+            <option value="">@T("Plugins.Sms.MultiSms.HistoryAll")</option>
+            @foreach (var kind in new[] { "Otp", "Test", "General" })
+            {
+                <option value="@kind" selected="@(Model.Kind == kind)">@kind</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label for="HistoryStatus">@T("Plugins.Sms.MultiSms.HistoryStatus")</label>
+        <select id="HistoryStatus" name="status" class="form-control">
+            <option value="">@T("Plugins.Sms.MultiSms.HistoryAll")</option>
+            @foreach (var state in new[] { "Pending", "Accepted", "Rejected", "Unknown" })
+            {
+                <option value="@state" selected="@(Model.Status == state)">@state</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary w-100">@T("Plugins.Sms.MultiSms.HistorySearch")</button>
+    </div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-striped table-hover">
+    <thead><tr>
+        <th>ID</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryDate")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryPhone")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryKind")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryProvider")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryStatus")</th>
+        <th>@T("Plugins.Sms.MultiSms.HistoryAttempts")</th>
+        <th></th>
+    </tr></thead>
+    <tbody>
+        @foreach (var message in Model.Messages)
+        {
+            <tr>
+                <td>@message.Id</td>
+                <td>@message.CreatedOnUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+                <td dir="ltr">@SmsHistoryFormatter.MaskPhone(message.Phone)</td>
+                <td>@message.Kind</td>
+                <td>@message.Provider</td>
+                <td>@message.Status</td>
+                <td>@message.AttemptCount</td>
+                <td>
+                    <a asp-controller="MultiSms" asp-action="Message" asp-area="Admin" asp-route-id="@message.Id">
+                        @T("Plugins.Sms.MultiSms.HistoryDetails")
+                    </a>
+                </td>
+            </tr>
+        }
+        @if (Model.Messages.Count == 0)
+        {
+            <tr><td colspan="8" class="text-center text-muted">@T("Plugins.Sms.MultiSms.HistoryEmpty")</td></tr>
+        }
+    </tbody>
+</table>
+</div>
+
+<nav class="d-flex justify-content-between mt-3">
+    <span>@Model.Total @T("Plugins.Sms.MultiSms.HistoryTotal") — @Model.Page / @Model.PageCount</span>
+    <div class="d-flex gap-2">
+        @if (Model.Page > 1)
+        {
+            <a class="btn btn-outline-secondary"
+               asp-action="History" asp-route-phone="@Model.Phone" asp-route-kind="@Model.Kind"
+               asp-route-status="@Model.Status" asp-route-page="@(Model.Page - 1)">
+                @T("Plugins.Sms.MultiSms.Previous")
+            </a>
+        }
+        @if (Model.Page < Model.PageCount)
+        {
+            <a class="btn btn-outline-secondary"
+               asp-action="History" asp-route-phone="@Model.Phone" asp-route-kind="@Model.Kind"
+               asp-route-status="@Model.Status" asp-route-page="@(Model.Page + 1)">
+                @T("Plugins.Sms.MultiSms.Next")
+            </a>
+        }
+    </div>
+</nav>
